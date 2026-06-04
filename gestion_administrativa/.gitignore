@@ -1,0 +1,14 @@
+# Archivos generados por LaTeX/Pandoc
+*.pdf
+*.aux
+*.log
+*.out
+*.toc
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+
+# Editor
+*~
+*.swp
+.DS_Store
