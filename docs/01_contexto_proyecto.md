@@ -37,14 +37,15 @@ Este proyecto comprende el diseño, desarrollo y despliegue de una plataforma di
 | **Seguridad de archivos** | 0% de archivos maliciosos subidos (Validación estricta). |
 | **Capacitación** | 100% del equipo administrativo y docente formado. |
 
-## ⚠️ Gestión de Riesgos
+## ⚠️ Gestión de Riesgos (Priorización)
 
-| Riesgo | Impacto | Plan de Mitigación |
-| :--- | :--- | :--- |
-| Falta de recursos iniciales | Alto | Digitalización progresiva; carga inicial mínima garantizada. |
-| Vulnerabilidades en archivos | Alto | Validación de Extensión, MIME real, Magic Number y análisis de integridad. |
-| Retrasos en Kubernetes | Medio | Iniciar con Docker Compose y migrar a K8s en Cycle 2. |
-| Baja adopción | Medio | Manuales de usuario simplificados y sesiones de capacitación. |
+| Riesgo | Probabilidad (1-5) | Impacto (1-5) | Criticidad (P × I) | Plan de Mitigación |
+| :--- | :---: | :---: | :---: | :--- |
+| **Vulnerabilidades en archivos subidos** | 3 | 5 | **15** | Validación estricta de extensiones, MIME type real (Magic Number), análisis estático de integridad y aislamiento en Object Storage (S3). |
+| **Baja adopción de la plataforma** | 3 | 4 | **12** | Elaboración de manuales multimedia interactivos y organización de talleres de inducción para docentes y estudiantes de la FIQ. |
+| **Falta de recursos bibliográficos iniciales** | 4 | 3 | **12** | Digitalización progresiva y priorizada de las tesis y guías de mayor demanda académica. Carga inicial mínima viable asegurada. |
+| **Retrasos en despliegue de Kubernetes** | 2 | 4 | **8** | Iniciar el desarrollo y testing usando Docker Compose, manteniendo los manifiestos de K8s listos para migración incremental en el Cycle 2. |
+
 
 ## 🏁 Conclusión Ejecutiva
 

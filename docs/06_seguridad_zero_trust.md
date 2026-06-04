@@ -8,6 +8,35 @@ Implementaremos un modelo **Zero Trust** para ocultar la infraestructura de ataq
 *   **Cloudflare Access:** Capa de autenticación perimetral para paneles administrativos y herramientas internas.
 *   **WAF (Web Application Firewall):** Mitigación automática de ataques L7 (DDoS, SQLi, XSS) en el borde de la red.
 
+### Flujo de Acceso Seguro (Secuencia)
+
+```mermaid
+sequenceDiagram
+    actor Usuario
+    participant CF as ☁️ Cloudflare Access / WAF
+    participant Tunnel as 🔒 Cloudflare Tunnel
+    participant Backend as ⚡ FastAPI Backend
+    participant DB as 🗄️ PostgreSQL (RBAC)
+
+    Usuario->>CF: Petición HTTPS (e.g., ver reportes)
+    CF->>CF: Evalúa Reglas WAF & Autenticación Access
+    alt Bloqueado por WAF / Sin sesión en Access
+        CF-->>Usuario: Bloqueo de Conexión (403 Forbidden / Redirección)
+    else Tráfico Limpio y Autenticado
+        CF->>Tunnel: Reenvía petición (Túnel seguro saliente)
+        Tunnel->>Backend: Canaliza petición al clúster K8s
+        Backend->>DB: Consulta rol y estado del usuario (JWT)
+        DB-->>Backend: Rol (Estudiante/Docente/Admin)
+        Backend->>Backend: Valida permisos según Matriz RBAC
+        alt Permisos Insuficientes
+            Backend-->>Usuario: Respuesta 403 Forbidden
+        else Autorizado
+            Backend-->>Usuario: Retorna Recurso / Acción Exitosa (200 OK)
+        end
+    end
+```
+
+
 ## 👥 Matriz de Permisos (RBAC)
 
 | Módulo / Acción | Estudiante | Docente | Administrador |

@@ -14,6 +14,23 @@ El proyecto se ejecutará bajo el marco de trabajo **Scrum**, garantizando entre
     *   *Daily Scrum:* Sincronización asíncrona mediante actualizaciones de estado en los Issues de Plane.
     *   *Sprint Review / Retrospective:* Reunión semanal (viernes 9:00 PM) para revisar entregables y bloqueos.
 
+### Flujo de Trabajo en Plane (Scrum Workflow)
+
+```mermaid
+stateDiagram-v2
+    [*] --> Sprint_Planning: Backlog Grooming (DoR)
+    Sprint_Planning --> Sprint_Backlog: Carga al Cycle en Plane
+    state Sprint_Backlog {
+        [*] --> In_Progress: Tarea Iniciada (Desarrollo)
+        In_Progress --> Code_Review: Pull Request (Peer Review)
+        Code_Review --> QA_Staging: Despliegue & Pruebas en Staging
+        QA_Staging --> Done: Cumple Criterios DoD
+    }
+    Done --> Sprint_Review: Demo a Stakeholders
+    Sprint_Review --> Sprint_Retrospective: Lecciones Aprendidas
+    Sprint_Retrospective --> [*]: Incremento de Software
+```
+
 ## 🚩 Producto Mínimo Viable (MVP)
 
 La primera versión funcional (V1.0) se centrará en la operatividad core:
@@ -32,20 +49,39 @@ La primera versión funcional (V1.0) se centrará en la operatividad core:
 | **HU03** | Como **administrador**, quiero revisar registros de actividad para auditar el uso de la plataforma. | 1. Filtro por fecha y usuario. 2. Detalle de IP y acción. 3. Visualización de reportes. |
 | **HU04** | Como **administrador**, quiero aprobar recursos subidos para garantizar la calidad académica. | 1. Listado de pendientes. 2. Previsualización del archivo. 3. Cambio de estado a "Aprobado". |
 
-## 🏗️ Estándares (DoR / DoD)
+## 🏗️ Estándares Metodológicos (DoR / DoD)
 
-### Definition of Ready (DoR)
-1. Está redactada claramente con el formato "Como... quiero... para...".
-2. Tiene Criterios de Aceptación (AC) detallados.
-3. Tiene prioridad definida en el backlog.
-4. Se identificaron dependencias técnicas y funcionales.
+### 📋 Estructura de Historia de Usuario (Plantilla)
+Toda Historia de Usuario en Plane debe estructurarse del siguiente modo:
+*   **Título:** Breve y descriptivo (ej: *HU02 - Carga segura de documentos*).
+*   **Narrativa:**
+    > **Como** [Rol del usuario]  
+    > **Quiero** [Realizar una acción/funcionalidad]  
+    > **Para** [Obtener un beneficio o valor de negocio]
+*   **Estimación:** Puntos de historia en base a la escala Fibonacci modificado (1, 2, 3, 5, 8, 13).
+*   **Criterios de Aceptación:** Listado de condiciones medibles de éxito en formato *Dado que... Cuando... Entonces...* o viñetas claras.
 
-### Definition of Done (DoD)
-1. Código implementado y revisado (Peer Review).
-2. Pasa todas las pruebas unitarias y funcionales en Staging.
-3. Cumple validaciones de seguridad (RBAC, sanitización).
-4. Documentada en Swagger/OpenAPI.
-5. El código sigue los estándares de estilo del proyecto.
+---
+
+### 🟢 Definition of Ready (DoR)
+Un issue está listo para entrar a un Cycle si cumple con:
+- [ ] Está redactada siguiendo el formato estándar de Historia de Usuario.
+- [ ] Tiene Criterios de Aceptación (AC) definidos y sin ambigüedades.
+- [ ] Ha sido estimada en consenso por el equipo técnico.
+- [ ] Se han identificado y documentado sus dependencias técnicas (BD, APIs, frontend).
+- [ ] No tiene bloqueos externos activos.
+
+---
+
+### 🏁 Definition of Done (DoD)
+Una historia se considera finalizada y lista para entrega de incremento si cumple con:
+- [ ] **Desarrollo:** Código limpio, sin comentarios temporales (`TODO`) y siguiendo los estándares del linter (PEP 8 para Python / ESLint para React).
+- [ ] **Revisión de Código:** Aprobado al menos por un revisor (Peer Review) mediante Pull Request.
+- [ ] **Pruebas:** 100% de pruebas unitarias locales y de integración ejecutadas con éxito.
+- [ ] **Staging:** Desplegado en el entorno de QA/Staging bajo Kubernetes y verificado visual y funcionalmente.
+- [ ] **Seguridad:** Pasa las comprobaciones automáticas de dependencias y no viola la matriz RBAC.
+- [ ] **Documentación:** API documentada dinámicamente con Swagger/OpenAPI y código documentado internamente si aplica.
+
 
 ## 📅 Cronograma por Ciclos (Cycles)
 

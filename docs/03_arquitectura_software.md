@@ -42,21 +42,18 @@ backend/
 ## 📐 Flujos Técnicos
 
 ### Diagrama de Arquitectura de Alto Nivel
-```text
-[ Estudiante / Docente ] 
-          │
-          ▼
-    [ Cloudflare ] <─── (WAF, Anti-DDoS, Zero Trust Access)
-          │
-    [ Cloudflare Tunnel ]
-          │
-          ▼
-[ Ingress Controller (K8s) ]
-          │
-    ┌─────┴────────────────────────┐
-    ▼                              ▼
-[ React UI ]                [ FastAPI Backend ] ─── [ Redis (Caché) ]
-    │                              │
-    │                              ├─▶ [ PostgreSQL (DB) ]
-    └──────────────────────────────┴─▶ [ Object Storage (S3) ]
+
+```mermaid
+graph TD
+    User["👥 Estudiante / Docente"] --> CF["☁️ Cloudflare<br>(WAF, Anti-DDoS, Zero Trust Access)"]
+    CF --> CFTunnel["🔒 Cloudflare Tunnel"]
+    CFTunnel --> Ingress["🌐 Ingress Controller (K8s)"]
+    Ingress --> ReactUI["💻 React UI (Frontend)"]
+    Ingress --> FastAPI["⚡ FastAPI Backend (API)"]
+    ReactUI --> FastAPI
+    FastAPI --> Redis[("💾 Redis (Caché)")]
+    FastAPI --> PostgreSQL[("🗄️ PostgreSQL (DB)")]
+    FastAPI --> S3[("📦 Object Storage (S3)")]
+    ReactUI -.-> S3
 ```
+
