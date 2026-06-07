@@ -10,46 +10,27 @@ jobs:
   test:
     runs-on: ubuntu-latest
     
-    services:
-      # We spin up auxiliary services via standard GitHub Action service containers
-      # or docker-compose to match the project's exact docker-compose ports.
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: fiq
-          POSTGRES_PASSWORD: fiq123
-          POSTGRES_DB: fiq_db
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd "pg_isready -U fiq -d fiq_db"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-          
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      minio:
-        image: minio/minio:latest
-        ports:
-          - 9000:9000
-          - 9001:9001
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-        options: >-
-          server /data --console-address ":9001"
-
     steps:
       - uses: actions/checkout@v4
+
+      - name: Start Docker Compose Services
+        run: |
+          # Start Postgres, Redis, and MinIO in the background
+          docker compose up -d postgres redis minio
+          
+          # Wait for Postgres to be healthy
+          echo "Waiting for Postgres..."
+          for i in {1..30}; do
+            docker compose exec -T postgres pg_isready -U fiq -d fiq_db && break
+            sleep 2
+          done
+
+          # Wait for Minio to be healthy
+          echo "Waiting for Minio..."
+          for i in {1..30}; do
+            curl -s http://localhost:9000/minio/health/ready && break
+            sleep 2
+          done
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -135,3 +116,8 @@ jobs:
           cd frontend
           # Playwright will automatically start 'npm run dev' via its config
           npx playwright test
+
+      - name: Stop Docker Compose Services
+        if: always()
+        run: |
+          docker compose down
