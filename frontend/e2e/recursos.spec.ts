@@ -21,7 +21,7 @@ test.describe('Flujo de Gestión de Recursos Académicos', () => {
     await expect(page.getByText('Subir Recurso Académico')).toBeVisible();
 
     // 4. Cargar archivo simulado
-    const pdfPath = '/home/blink/Proyectos/FIQ/documento de prueba.pdf';
+    const pdfPath = path.resolve(__dirname, '../../documento de prueba.pdf');
     const mockPdfBuffer = fs.readFileSync(pdfPath);
     await page.setInputFiles('input[type="file"]', {
       name: 'documento_de_prueba.pdf',
