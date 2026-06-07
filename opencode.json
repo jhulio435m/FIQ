@@ -1,0 +1,35 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md"],
+  "plugin": ["opencode-skills-collection@latest"],
+  "skills": {
+    "paths": [
+      ".opencode/skills",
+      ".opencode/skills-collections/gentleman-skills/curated",
+      ".opencode/skills-collections/opencode-skills/skills",
+      ".opencode/skills-collections/opencode-skills/.opencode/commands"
+    ]
+  },
+  "agent": {
+    "frontend-dev": {
+      "description": "Senior frontend engineer — React, TypeScript, Tailwind, shadcn/ui.",
+      "mode": "subagent",
+      "permission": { "edit": "allow", "bash": "allow" }
+    },
+    "backend-dev": {
+      "description": "Senior backend engineer — FastAPI, SQLAlchemy, PostgreSQL.",
+      "mode": "subagent",
+      "permission": { "edit": "allow", "bash": "allow" }
+    },
+    "qa-engineer": {
+      "description": "QA engineer — Vitest, Playwright, Pytest, MSW.",
+      "mode": "subagent",
+      "permission": { "edit": "allow", "bash": "ask" }
+    },
+    "architect": {
+      "description": "System architect — reviews structure and makes design decisions. Read-only.",
+      "mode": "subagent",
+      "permission": { "edit": "deny", "bash": "ask" }
+    }
+  }
+}

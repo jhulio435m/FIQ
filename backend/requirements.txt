@@ -1,0 +1,17 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+sqlmodel==0.0.22
+fastapi-users[sqlalchemy]==14.0.1
+fastapi-users-db-sqlmodel==0.3.0
+sqlalchemy==2.0.40
+asyncpg==0.30.0
+psycopg[binary]==3.3.4
+alembic==1.15.2
+python-jose[cryptography]==3.4.0
+python-multipart==0.0.20
+pydantic-settings==2.8.1
+redis==5.2.1
+aioboto3==13.4.0
+structlog==25.1.0
+python-dotenv==1.1.0
+httpx==0.28.1

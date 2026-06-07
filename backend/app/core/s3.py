@@ -1,0 +1,73 @@
+import uuid
+
+import aioboto3
+from fastapi import UploadFile
+
+from app.core.config import settings
+
+class S3Service:
+    def __init__(self):
+        self.session = aioboto3.Session()
+        self.config = {
+            "service_name": "s3",
+            "endpoint_url": settings.S3_ENDPOINT,
+            "aws_access_key_id": settings.S3_ACCESS_KEY,
+            "aws_secret_access_key": settings.S3_SECRET_KEY,
+            "use_ssl": False if "localhost" in settings.S3_ENDPOINT or "minio" in settings.S3_ENDPOINT else True,
+        }
+        self.bucket_name = settings.S3_BUCKET_NAME
+
+    async def generate_presigned_post(self, file_name: str, folder: str = "resources", expiration: int = 3600):
+        """Generate a presigned POST URL for direct browser upload"""
+        key = f"{folder}/{uuid.uuid4()}_{file_name}"
+        async with self.session.client(**self.config) as s3:
+            try:
+                response = await s3.generate_presigned_post(
+                    Bucket=self.bucket_name,
+                    Key=key,
+                    ExpiresIn=expiration,
+                    Conditions=[
+                        ["content-length-range", 0, settings.MAX_UPLOAD_SIZE]
+                    ]
+                )
+                if response and "minio:9000" in response["url"]:
+                    response["url"] = response["url"].replace("minio:9000", "localhost:9000")
+                return response, key
+            except Exception as e:
+                print(f"Error generating presigned post: {e}")
+                return None, None
+
+    async def get_presigned_url(self, file_path: str, expiration: int = 3600) -> str:
+        """Generate a presigned GET URL for secure file download"""
+        async with self.session.client(**self.config) as s3:
+            try:
+                url = await s3.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": self.bucket_name, "Key": file_path},
+                    ExpiresIn=expiration,
+                )
+                if "minio:9000" in url:
+                    url = url.replace("minio:9000", "localhost:9000")
+                return url
+            except Exception as e:
+                print(f"Error generating presigned URL: {e}")
+                return ""
+
+    async def upload_file(self, file: UploadFile, folder: str = "resources") -> str:
+        """Upload a FastAPI UploadFile to object storage and return its object key."""
+        safe_name = file.filename or "resource.pdf"
+        key = f"{folder}/{uuid.uuid4()}_{safe_name}"
+        async with self.session.client(**self.config) as s3:
+            try:
+                await s3.create_bucket(Bucket=self.bucket_name)
+            except Exception:
+                pass
+            await s3.upload_fileobj(
+                file.file,
+                self.bucket_name,
+                key,
+                ExtraArgs={"ContentType": file.content_type or "application/octet-stream"},
+            )
+        return key
+
+s3_service = S3Service()
