@@ -1,0 +1,38 @@
+services:
+  # 1. Backend Web Service (FastAPI)
+  - type: web
+    name: fiq-backend-test
+    runtime: python
+    buildCommand: "pip install -r backend/requirements.txt"
+    preDeployCommand: "cd backend && alembic upgrade head && python -m app.core.seed"
+    startCommand: "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Will be set to your Supabase connection string
+      - key: REDIS_URL
+        sync: false # Will be set to your Upstash connection string
+      - key: S3_ENDPOINT
+        sync: false # Will be set to your Cloudflare R2 Endpoint URL
+      - key: S3_ACCESS_KEY
+        sync: false # Will be set to your Cloudflare R2 Access Key
+      - key: S3_SECRET_KEY
+        sync: false # Will be set to your Cloudflare R2 Secret Key
+      - key: S3_BUCKET_NAME
+        sync: false # Will be set to your Cloudflare R2 Bucket Name
+      - key: SECRET_KEY
+        generateValue: true # Render will automatically generate a secure random string for JWT
+      - key: CORS_ORIGINS
+        sync: false # Will be set to your Frontend URL (e.g., ["https://fiq-frontend-test.onrender.com"])
+
+  # 2. Frontend Static Site (React Vite)
+  - type: web
+    name: fiq-frontend-test
+    env: static
+    buildCommand: "cd frontend && npm install && npm run build"
+    publishPath: "frontend/dist"
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: fiq-backend-test
+          type: web
+          property: host
