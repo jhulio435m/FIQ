@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from sqlalchemy import or_
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from typing import List, Optional
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from app.core.database import get_db
 from app.core.users import current_active_user, get_optional_user
@@ -257,8 +258,35 @@ async def get_resource_url(
     recurso = await db.get(Recurso, resource_id)
     if not recurso:
         raise HTTPException(status_code=404, detail="Recurso no encontrado")
-    url = await s3_service.get_presigned_url(recurso.url_archivo)
-    return {"url": url or recurso.url_archivo}
+    return {"url": f"/api/resources/{resource_id}/file"}
+
+
+@router.get("/{resource_id}/file")
+async def get_resource_file(
+    resource_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    recurso = await db.get(Recurso, resource_id)
+    if not recurso:
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
+
+    async with s3_service.session.client(**s3_service.config) as s3:
+        try:
+            obj = await s3.get_object(Bucket=s3_service.bucket_name, Key=recurso.url_archivo)
+            body = await obj["Body"].read()
+        except Exception as exc:
+            print(f"Error reading resource file from object storage: {exc}")
+            raise HTTPException(status_code=404, detail="Archivo no encontrado") from exc
+
+    filename = quote(recurso.url_archivo.rsplit("/", 1)[-1])
+    return Response(
+        content=body,
+        media_type=recurso.archivo_mime or "application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "private, max-age=300",
+        },
+    )
 
 
 @router.post("/{resource_id}/download")
@@ -287,9 +315,7 @@ async def track_download(
             detalle_accion={"resource_id": recurso.id, "titulo": recurso.titulo}
         )
 
-    # Generate professional presigned URL
-    url = await s3_service.get_presigned_url(recurso.url_archivo)
-    return {"download_url": url or recurso.url_archivo, "resource": await _resource_payload(db, recurso)}
+    return {"download_url": f"/api/resources/{resource_id}/file", "resource": await _resource_payload(db, recurso)}
 
 
 @router.get("/pending", response_model=List[RecursoRead])
