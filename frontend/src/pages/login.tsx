@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router"
+import axios from "axios"
 import { useAuthStore } from "@/stores/auth"
 import { login, getMicrosoftAuthorizeUrl, microsoftLogin } from "@/services/auth"
 import { Button } from "@/components/ui/button"
@@ -28,9 +29,11 @@ export default function Login() {
           const res = await microsoftLogin(code, redirectUri)
           setAuth(res.usuario, res.access_token)
           navigate("/")
-        } catch (err: any) {
-          const detail = err.response?.data?.detail || "Error al iniciar sesión con Microsoft"
-          setError(detail)
+        } catch (err: unknown) {
+          const detail = axios.isAxiosError<{ detail?: string }>(err)
+            ? err.response?.data?.detail
+            : undefined
+          setError(detail || "Error al iniciar sesión con Microsoft")
         } finally {
           setMsLoading(false)
         }
@@ -46,9 +49,11 @@ export default function Login() {
       const redirectUri = window.location.origin + "/login"
       const authUrl = await getMicrosoftAuthorizeUrl(redirectUri)
       window.location.href = authUrl
-    } catch (err: any) {
-      const detail = err.response?.data?.detail || "No se pudo conectar con Microsoft"
-      setError(detail)
+    } catch (err: unknown) {
+      const detail = axios.isAxiosError<{ detail?: string }>(err)
+        ? err.response?.data?.detail
+        : undefined
+      setError(detail || "No se pudo conectar con Microsoft")
       setMsLoading(false)
     }
   }

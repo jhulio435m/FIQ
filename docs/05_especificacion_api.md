@@ -5,7 +5,7 @@
 El backend (FastAPI) expondrá una API REST consumida por el frontend en React.
 
 ### 🔐 Protocolo de Autenticación
-*   **JWT (JSON Web Tokens): Tokens con tipado de ID corregido (int) para estabilidad.** Tokens de acceso con expiración corta y Refresh Tokens para persistencia de sesión segura.
+*   **JWT (JSON Web Tokens): Tokens con identificador de usuario UUID.** Tokens de acceso con expiración corta y Refresh Tokens para persistencia de sesión segura.
 
 ### 🌐 Catálogo de Endpoints
 
@@ -60,7 +60,7 @@ El backend (FastAPI) expondrá una API REST consumida por el frontend en React.
       "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
       "token_type": "bearer",
       "usuario": {
-        "id": 1024,
+        "id": "8b0fba33-3f62-4e87-b0d6-1d7f880bc197",
         "nombre": "Jhulio Moran",
         "email": "usuario@uncp.edu.pe",
         "rol": "Docente"
@@ -167,6 +167,15 @@ El backend (FastAPI) expondrá una API REST consumida por el frontend en React.
     ```
 *   **Response Body (200 OK):** Objeto `Recurso` completo con los metadatos actualizados.
 
+### 8. Archivado Lógico del Recurso (`DELETE /resources/{id}`)
+*   **Request Body (JSON, opcional):**
+    ```json
+    {
+      "comentario": "Recurso retirado por version obsoleta."
+    }
+    ```
+*   **Response Body (200 OK):** Objeto `Recurso` completo con `estado_id` correspondiente a `Archivado`. El recurso archivado deja de aparecer en `GET /resources`.
+
 ---
 
 ## 🚫 Estructura Estándar de Errores
@@ -191,4 +200,3 @@ Todas las respuestas de error siguen el estándar de FastAPI con una lista detal
       "detail": "El recurso solicitado no existe o no tiene permisos de acceso."
     }
     ```
-

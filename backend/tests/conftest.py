@@ -66,8 +66,10 @@ async def seed_reference_data(db: AsyncSession) -> dict[str, uuid.UUID]:
             EstadoRecurso(id=1, nombre="Pendiente"),
             EstadoRecurso(id=2, nombre="Aprobado"),
             EstadoRecurso(id=3, nombre="Observado"),
+            EstadoRecurso(id=5, nombre="Archivado"),
             Curso(id=1, nombre="Química General", codigo="QUI101"),
             TipoActividad(id=1, nombre="login"),
+            TipoActividad(id=8, nombre="resource_archive"),
             NivelDificultad(id=1, nombre="Básico"),
             ModuloLaboratorio(
                 id=1,

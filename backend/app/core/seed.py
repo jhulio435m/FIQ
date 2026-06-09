@@ -92,6 +92,7 @@ async def seed():
             TipoActividad(id=5, nombre="view"),
             TipoActividad(id=6, nombre="lab_access"),
             TipoActividad(id=7, nombre="resource_approve"),
+            TipoActividad(id=8, nombre="resource_archive"),
         ]
         db.add_all(actividades)
 

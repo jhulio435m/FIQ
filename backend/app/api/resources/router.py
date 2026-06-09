@@ -415,3 +415,43 @@ async def update_resource(
         )
     return await _resource_payload(db, recurso)
 
+
+@router.delete("/{resource_id}", response_model=RecursoRead)
+async def archive_resource(
+    request: Request,
+    resource_id: int,
+    data: ResourceModeration | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("Admin")),
+):
+    recurso = await db.get(Recurso, resource_id)
+    if not recurso:
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
+
+    archived_id = await _state_id(db, "Archivado")
+    previous_state = recurso.estado_id
+    recurso.estado_id = archived_id
+    recurso.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.add(
+        RecursoEstadoHistorial(
+            recurso_id=recurso.id,
+            estado_anterior_id=previous_state,
+            estado_nuevo_id=archived_id,
+            comentario=data.comentario if data else None,
+            cambiado_por=user.id,
+        )
+    )
+    await db.commit()
+    await db.refresh(recurso)
+
+    tipo = await _activity_type(db, "resource_archive")
+    if tipo:
+        await log_activity(
+            db,
+            usuario_id=user.id,
+            tipo_actividad_id=tipo.id,
+            ip_origen=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            detalle_accion={"resource_id": recurso.id, "titulo": recurso.titulo},
+        )
+    return await _resource_payload(db, recurso)

@@ -3,7 +3,7 @@
 Plataforma integral para la Facultad de Ingeniería Química - UNCP. Gestión de recursos académicos, laboratorios virtuales y auditoría avanzada.
 
 ## 🚀 Estado del Proyecto
-El sistema es **100% funcional** y utiliza tecnologías de vanguardia para garantizar seguridad y escalabilidad.
+El sistema cuenta con un **MVP funcional verificable** para biblioteca, autenticación, laboratorios, administración y auditoría. La ruta a release productivo queda documentada en [`docs/08_estado_brechas.md`](./docs/08_estado_brechas.md).
 
 ### Funcionalidades Core Implementadas:
 - **Autenticación & RBAC:** Login con JWT, roles de Admin, Docente y Estudiante.
@@ -60,3 +60,5 @@ Consultar la carpeta [`docs/`](./docs/) para especificaciones profundas:
 - [Modelo de Datos](./docs/04_modelo_datos.md)
 - [Especificación API](./docs/05_especificacion_api.md)
 - [Seguridad Zero Trust](./docs/06_seguridad_zero_trust.md)
+- [Infraestructura y DevOps](./docs/07_infraestructura_devops.md)
+- [Estado, Brechas y Continuidad](./docs/08_estado_brechas.md)

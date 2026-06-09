@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "FIQ Plataforma Digital"
     VERSION: str = "1.0.0"
 
-    DATABASE_URL: str = "postgresql://fiq:fiq123@localhost:5432/fiq_db"
+    DATABASE_URL: str = "postgresql://fiq:fiq123@localhost:5433/fiq_db"
     REDIS_URL: str = "redis://localhost:6379/0"
     SECRET_KEY: str = "dev-secret-key-change-in-production-32-bytes"
     ALGORITHM: str = "HS256"

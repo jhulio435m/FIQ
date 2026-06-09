@@ -2,9 +2,40 @@ import { useEffect, useRef, useState } from "react"
 import { Loader2, ZoomIn, ZoomOut, AlertCircle, Maximize2, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
+interface PdfViewport {
+  width: number
+  height: number
+}
+
+interface PdfRenderTask {
+  promise: Promise<void>
+  cancel: () => void
+}
+
+interface PdfJsPage {
+  getViewport: (options: { scale: number }) => PdfViewport
+  render: (options: { canvasContext: CanvasRenderingContext2D; viewport: PdfViewport }) => PdfRenderTask
+}
+
+interface PdfJsDocument {
+  numPages: number
+  getPage: (pageNumber: number) => Promise<PdfJsPage>
+}
+
+interface PdfJsLoadingTask {
+  promise: Promise<PdfJsDocument>
+}
+
+interface PdfJsLib {
+  GlobalWorkerOptions: {
+    workerSrc: string
+  }
+  getDocument: (options: { data: ArrayBuffer }) => PdfJsLoadingTask
+}
+
 declare global {
   interface Window {
-    pdfjsLib: any
+    pdfjsLib?: PdfJsLib
   }
 }
 
@@ -20,7 +51,7 @@ export function PdfViewer({ url }: Props) {
   const [libLoaded, setLibLoaded] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [pdfDoc, setPdfDoc] = useState<any>(null)
+  const [pdfDoc, setPdfDoc] = useState<PdfJsDocument | null>(null)
   const [numPages, setNumPages] = useState(0)
   const [scale, setScale] = useState(1.25)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -36,6 +67,11 @@ export function PdfViewer({ url }: Props) {
     script.src = PDFJS_SCRIPT_URL
     script.async = true
     script.onload = () => {
+      if (!window.pdfjsLib) {
+        setError("Error al inicializar la librería de visualización (PDF.js).")
+        setLoading(false)
+        return
+      }
       window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL
       setLibLoaded(true)
     }
@@ -61,13 +97,15 @@ export function PdfViewer({ url }: Props) {
         const arrayBuffer = await response.arrayBuffer()
         if (!isMounted) return
 
+        if (!window.pdfjsLib) throw new Error("PDF.js no está disponible")
+
         const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer })
         const pdf = await loadingTask.promise
         
         if (!isMounted) return
         setPdfDoc(pdf)
         setNumPages(pdf.numPages)
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (isMounted) {
           console.error("Error loading PDF:", err)
           setError("No se pudo cargar la vista previa del PDF. Asegúrese de que es un archivo PDF válido.")
@@ -97,7 +135,7 @@ export function PdfViewer({ url }: Props) {
   const handleFitWidth = () => {
     if (!pdfDoc || !containerRef.current) return
     // Fit width based on the first page width
-    pdfDoc.getPage(1).then((page: any) => {
+    pdfDoc.getPage(1).then((page) => {
       if (!containerRef.current) return
       // Subtract left sidebar width (112px) and padding + scrollbar space
       const containerWidth = containerRef.current.clientWidth - 112 - 56
@@ -221,7 +259,7 @@ export function PdfViewer({ url }: Props) {
 }
 
 interface PageProps {
-  pdfDoc: any
+  pdfDoc: PdfJsDocument
   pageNumber: number
   scale: number
 }
@@ -233,13 +271,13 @@ function PdfPage({ pdfDoc, pageNumber, scale }: PageProps) {
   const [loading, setLoading] = useState(true)
   const [aspectRatio, setAspectRatio] = useState<number>(1 / 1.414) // default A4 portrait
   const [originalWidth, setOriginalWidth] = useState<number>(650) // base width of page
-  const renderTaskRef = useRef<any>(null)
+  const renderTaskRef = useRef<PdfRenderTask | null>(null)
 
   // 1. Get aspect ratio of the page before rendering
   useEffect(() => {
     if (!pdfDoc) return
     let isMounted = true
-    pdfDoc.getPage(pageNumber).then((page: any) => {
+    pdfDoc.getPage(pageNumber).then((page) => {
       if (!isMounted) return
       const viewport = page.getViewport({ scale: 1.0 })
       setAspectRatio(viewport.width / viewport.height)
@@ -296,8 +334,8 @@ function PdfPage({ pdfDoc, pageNumber, scale }: PageProps) {
         const renderTask = page.render(renderContext)
         renderTaskRef.current = renderTask
         await renderTask.promise
-      } catch (err: any) {
-        if (err.name !== "RenderingCancelledException") {
+      } catch (err: unknown) {
+        if (!(err instanceof Error) || err.name !== "RenderingCancelledException") {
           console.error(`Error rendering page ${pageNumber}:`, err)
         }
       } finally {
