@@ -150,6 +150,16 @@ async def seed():
             s3_client.create_bucket(Bucket=settings.S3_BUCKET_NAME)
         except:
             pass
+        existing_objects = s3_client.list_objects_v2(Bucket=settings.S3_BUCKET_NAME)
+        if "Contents" in existing_objects:
+            s3_client.delete_objects(
+                Bucket=settings.S3_BUCKET_NAME,
+                Delete={
+                    "Objects": [
+                        {"Key": item["Key"]} for item in existing_objects["Contents"]
+                    ]
+                },
+            )
 
         seed_files = [
             ("seed_files/documento_de_prueba.pdf", "Documento de prueba", 1, 1),
