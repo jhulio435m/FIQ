@@ -152,8 +152,7 @@ async def seed():
             pass
 
         seed_files = [
-            ("seed_files/guia_estequiometria.pdf", "Guía de Estequiometría", 3, 1),
-            ("seed_files/manual_operaciones.pdf", "Manual de Operaciones Unitarias", 2, 2),
+            ("seed_files/documento_de_prueba.pdf", "Documento de prueba", 1, 1),
         ]
 
         # Re-fetch admin to avoid detached state
