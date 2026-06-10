@@ -74,13 +74,13 @@ export default function Login() {
     <div className="min-h-[80vh] flex items-center justify-center px-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-brand-700">Iniciar Sesión</CardTitle>
+          <CardTitle className="text-brand-700 dark:text-brand-400">Iniciar Sesión</CardTitle>
         </CardHeader>
         <CardContent>
           {msLoading && (
             <div className="flex flex-col items-center justify-center py-6 gap-2">
               <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
-              <p className="text-sm text-gray-500">Autenticando con Microsoft...</p>
+              <p className="text-sm text-gray-500 dark:text-zinc-400">Autenticando con Microsoft...</p>
             </div>
           )}
 
@@ -88,7 +88,7 @@ export default function Login() {
             <>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label htmlFor="email" className="text-sm font-medium text-gray-700">Email</label>
+                  <label htmlFor="email" className="text-sm font-medium text-gray-700 dark:text-zinc-300">Email</label>
                   <Input
                     id="email"
                     type="email"
@@ -99,7 +99,7 @@ export default function Login() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="password" className="text-sm font-medium text-gray-700">Contraseña</label>
+                  <label htmlFor="password" className="text-sm font-medium text-gray-700 dark:text-zinc-300">Contraseña</label>
                   <Input
                     id="password"
                     type="password"
@@ -116,17 +116,17 @@ export default function Login() {
 
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-gray-200" />
+                  <span className="w-full border-t border-gray-200 dark:border-zinc-800" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white px-2 text-gray-400">O continuar con</span>
+                  <span className="bg-card px-2 text-gray-400 dark:text-zinc-500">O continuar con</span>
                 </div>
               </div>
 
               <Button
                 type="button"
                 variant="outline"
-                className="w-full flex items-center justify-center gap-2 cursor-pointer border-gray-200 hover:bg-gray-50"
+                className="w-full flex items-center justify-center gap-2 cursor-pointer border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800"
                 onClick={handleMicrosoftClick}
                 disabled={msLoading}
               >

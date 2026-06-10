@@ -32,12 +32,12 @@ export default function Laboratorios() {
     <div className="mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-brand-900">Laboratorios Interactivos</h1>
-          <p className="mt-2 text-sm text-gray-500">
+          <h1 className="text-3xl font-bold text-brand-900 dark:text-brand-100">Laboratorios Interactivos</h1>
+          <p className="mt-2 text-sm text-gray-500 dark:text-zinc-400">
             Simuladores de ingeniería química con parámetros modificables y resultados en tiempo real.
           </p>
         </div>
-        <Badge className="w-fit bg-brand-50 text-brand-700">
+        <Badge className="w-fit bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300">
           <Play className="mr-1 h-3.5 w-3.5" />
           Simulación activa
         </Badge>
@@ -62,24 +62,24 @@ export default function Laboratorios() {
                   key={lab.id}
                   type="button"
                   onClick={() => setActiveLabId(lab.id)}
-                  className={`w-full rounded-lg border p-4 text-left transition ${
+                  className={`w-full rounded-lg border p-4 text-left transition cursor-pointer ${
                     isActive
-                      ? "border-brand-500 bg-brand-50 shadow-sm"
-                      : "border-gray-200 bg-white hover:border-brand-200 hover:bg-gray-50"
+                      ? "border-brand-500 bg-brand-50 dark:bg-brand-950/20 shadow-sm"
+                      : "border-gray-200 bg-white hover:border-brand-200 hover:bg-gray-50 dark:border-zinc-800 dark:bg-zinc-900/40 dark:hover:border-brand-500/50 dark:hover:bg-zinc-900"
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <div
                       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${
-                        isActive ? "bg-brand-500 text-white" : "bg-gray-100 text-brand-600"
+                        isActive ? "bg-brand-500 text-white" : "bg-gray-100 text-brand-600 dark:bg-zinc-800 dark:text-brand-400"
                       }`}
                     >
                       <Icon className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-semibold text-gray-950">{lab.titulo}</h3>
+                      <h3 className="font-semibold text-gray-950 dark:text-zinc-50">{lab.titulo}</h3>
                       <Badge className={`mt-2 ${LAB_LEVEL_COLORS[level]}`}>{level}</Badge>
-                      <p className="mt-2 text-xs leading-5 text-gray-500">{lab.descripcion}</p>
+                      <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-zinc-400">{lab.descripcion}</p>
                     </div>
                   </div>
                 </button>
