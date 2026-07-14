@@ -50,7 +50,7 @@ Revision ejecutada contra la documentacion `docs/01` a `docs/07`, `README.md`, `
 
 | ID | Brecha | Impacto | Siguiente accion |
 | :--- | :--- | :--- | :--- |
-| P2-01 | No hay manifiestos Kubernetes versionados. | No se cumple el destino dev -> Kubernetes prod. | Crear `infra/k8s/` con deployments, services, ingress, configmaps, external secrets y probes. |
+| P2-01 | Manifiestos Kubernetes aún no implementados; ya existe ruta `infra/k8s/` y plan HA. | No se cumple todavía el destino dev -> Kubernetes prod. | Completar `infra/k8s/` con deployments, services, ingress, configmaps, external secrets y probes. |
 | P2-02 | Cloudflare Tunnel esta documentado, pero no configurado en repo. | Falta evidencia de acceso Zero Trust. | Agregar plantilla `cloudflared` y guia de variables sin secretos. |
 | P2-03 | Backups y restore no estan automatizados. | Riesgo operativo para PostgreSQL y MinIO/S3. | Documentar job de backup, retencion, prueba de restore y versionamiento de bucket. |
 | P2-04 | Observabilidad minima no esta materializada. | No hay trazabilidad operacional de latencia, errores ni disponibilidad. | Agregar health checks extendidos, metricas basicas y logging estructurado centralizable. |
@@ -60,7 +60,7 @@ Revision ejecutada contra la documentacion `docs/01` a `docs/07`, `README.md`, `
 1. Cerrar P0 con verificacion completa y pruebas negativas backend.
 2. Agregar Vitest/RTL/MSW para cubrir estados de UI que Playwright no debe absorber.
 3. Refactorizar E2E con Page Objects solo despues de que la suite actual este verde.
-4. Preparar `infra/k8s/` y Cloudflare como siguiente incremento de despliegue, sin subir secretos.
+4. Completar manifiestos de `infra/k8s/`, fallback `infra/swarm/` y Cloudflare como siguiente incremento de despliegue, sin subir secretos.
 5. Convertir el primer laboratorio en una simulacion interactiva real para que el modulo deje de ser solo catalogo.
 
 ## Skills aplicadas

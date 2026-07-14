@@ -159,6 +159,7 @@ Los resultados externos se normalizan a metadatos comunes: titulo, autores, edit
 ## Documentacion
 
 - [API](./docs/05_especificacion_api.md)
+- [Plan HA, Kubernetes/Swarm y Power BI](./docs/14_plan_ha_kubernetes_swarm_powerbi.md)
 - [Seguridad de uploads](./docs/09_seguridad_uploads.md)
 - [Roles y permisos](./docs/10_roles_permisos.md)
 - [Pruebas](./docs/11_pruebas.md)

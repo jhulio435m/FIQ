@@ -61,6 +61,7 @@ Contrato REST real generado por FastAPI y verificado con `npm run openapi:check`
 | `GET /reports/public/courses` | API key | Cursos para dashboard externo. |
 | `GET /reports/public/users` | API key | Usuarios para dashboard externo. |
 | `GET /reports/public/activities` | API key | Actividades para dashboard externo. |
+| `GET /reports/public/document-metrics` | API key | Métricas documentales MongoDB agregadas para Power BI. |
 
 ## Payloads Principales
 
@@ -242,6 +243,10 @@ Eventos esperados:
 Campos registrados: usuario, tipo, fecha/hora, IP, user agent y detalle JSON con recurso, resultado o motivo.
 
 `GET /activity/events` consulta la colección MongoDB `activity_events` cuando `MONGO_ENABLED=true`. Devuelve documentos enriquecidos con `sql_activity_id`, `usuario_id`, `tipo_actividad`, `occurred_at`, IP, user agent y `detalle_accion`. Si MongoDB no está configurado, responde `503`.
+
+## Power BI
+
+Los endpoints `/reports/public/*` usan `DASHBOARD_API_KEY`. `GET /reports/public/document-metrics` devuelve agregados de MongoDB para `activity_events` y `external_catalog_cache`; si MongoDB no está inicializado, responde con `mongo_enabled=false` y colecciones vacías para que Power BI mantenga un esquema estable.
 
 ## Verificacion
 

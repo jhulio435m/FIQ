@@ -7,6 +7,7 @@ from app.api.external_catalog.cache import build_cache_key
 from app.api.external_catalog.schemas import ExternalWork
 from app.api.resources import router as resources_router
 from app.logs import crud as logs_crud
+from app.reports import router as reports_router
 from app.models.activity import RegistroActividad
 from app.models.resource import Recurso
 from tests.conftest import seed_reference_data
@@ -528,3 +529,37 @@ async def test_external_import_rejects_student_role(
     )
 
     assert response.status_code == 403
+
+
+async def test_powerbi_document_metrics_returns_empty_payload_without_mongo(
+    client: AsyncClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(reports_router.settings, "DASHBOARD_API_KEY", "test-key")
+    monkeypatch.setattr(reports_router, "get_activity_events_collection", lambda: None)
+    monkeypatch.setattr(reports_router, "get_external_cache_collection", lambda: None)
+
+    response = await client.get(
+        "/reports/public/document-metrics",
+        params={"api_key": "test-key"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mongo_enabled"] is False
+    assert payload["activity_events"]["total"] == 0
+    assert payload["external_catalog_cache"]["recent"] == []
+
+
+async def test_powerbi_document_metrics_requires_api_key(
+    client: AsyncClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(reports_router.settings, "DASHBOARD_API_KEY", "test-key")
+
+    response = await client.get(
+        "/reports/public/document-metrics",
+        params={"api_key": "wrong-key"},
+    )
+
+    assert response.status_code == 401

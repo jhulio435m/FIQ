@@ -2,11 +2,13 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy import cast, Date
+from pymongo.errors import PyMongoError
 
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import require_role
+from app.core.mongo import get_activity_events_collection, get_external_cache_collection
 from app.models.resource import Recurso, TipoRecurso, Curso
 from app.models.user import User
 from app.models.activity import RegistroActividad, TipoActividad
@@ -279,3 +281,126 @@ async def public_activities(
         for a in res.all()
     ]
 
+
+@router.get("/public/document-metrics")
+async def public_document_metrics(
+    api_key: str = Query(..., description="API Key for PowerBI access"),
+    limit: int = Query(25, ge=1, le=100),
+):
+    _require_dashboard_api_key(api_key)
+
+    activity_collection = get_activity_events_collection()
+    cache_collection = get_external_cache_collection()
+    if activity_collection is None or cache_collection is None:
+        return {
+            "mongo_enabled": False,
+            "activity_events": {
+                "total": 0,
+                "by_type": [],
+                "by_date": [],
+            },
+            "external_catalog_cache": {
+                "total": 0,
+                "by_kind": [],
+                "recent": [],
+            },
+        }
+
+    try:
+        activity_total = await activity_collection.count_documents({})
+        by_type_cursor = activity_collection.aggregate(
+            [
+                {"$group": {"_id": "$tipo_actividad", "cantidad": {"$sum": 1}}},
+                {"$sort": {"cantidad": -1}},
+                {"$limit": limit},
+            ]
+        )
+        by_date_cursor = activity_collection.aggregate(
+            [
+                {
+                    "$group": {
+                        "_id": {
+                            "$dateToString": {
+                                "format": "%Y-%m-%d",
+                                "date": "$occurred_at",
+                            }
+                        },
+                        "cantidad": {"$sum": 1},
+                    }
+                },
+                {"$sort": {"_id": -1}},
+                {"$limit": limit},
+            ]
+        )
+
+        cache_total = await cache_collection.count_documents({})
+        by_kind_cursor = cache_collection.aggregate(
+            [
+                {"$group": {"_id": "$kind", "cantidad": {"$sum": 1}}},
+                {"$sort": {"cantidad": -1}},
+            ]
+        )
+        recent_cursor = (
+            cache_collection.find(
+                {},
+                {
+                    "_id": 0,
+                    "kind": 1,
+                    "params": 1,
+                    "created_at": 1,
+                    "expires_at": 1,
+                },
+            )
+            .sort("created_at", -1)
+            .limit(limit)
+        )
+
+        by_type = await by_type_cursor.to_list(length=limit)
+        by_date = await by_date_cursor.to_list(length=limit)
+        by_kind = await by_kind_cursor.to_list(length=limit)
+        recent_cache = await recent_cursor.to_list(length=limit)
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No se pudo consultar MongoDB para Power BI",
+        ) from exc
+
+    return {
+        "mongo_enabled": True,
+        "activity_events": {
+            "total": activity_total,
+            "by_type": [
+                {
+                    "tipo_actividad": item.get("_id") or "desconocido",
+                    "cantidad": item["cantidad"],
+                }
+                for item in by_type
+            ],
+            "by_date": [
+                {
+                    "fecha": item["_id"],
+                    "cantidad": item["cantidad"],
+                }
+                for item in by_date
+            ],
+        },
+        "external_catalog_cache": {
+            "total": cache_total,
+            "by_kind": [
+                {
+                    "tipo_busqueda": item.get("_id") or "desconocido",
+                    "cantidad": item["cantidad"],
+                }
+                for item in by_kind
+            ],
+            "recent": [
+                {
+                    "kind": item.get("kind"),
+                    "params": item.get("params", {}),
+                    "created_at": item["created_at"].isoformat() if item.get("created_at") else None,
+                    "expires_at": item["expires_at"].isoformat() if item.get("expires_at") else None,
+                }
+                for item in recent_cache
+            ],
+        },
+    }

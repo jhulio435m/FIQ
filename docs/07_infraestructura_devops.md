@@ -36,5 +36,10 @@ flowchart LR
 ## 💾 Respaldo y Recuperación ante Desastres (DRP)
 
 *   **PostgreSQL:** Backups diarios automatizados con retención de 30 días en S3.
+*   **MongoDB:** Backups de `fiq_events` con restore test para `activity_events` y `external_catalog_cache`.
 *   **Object Storage (S3):** Versionamiento activo de archivos académicos.
 *   **RTO/RPO:** Tiempo de recuperación estimado menor a 2 horas mediante infraestructura como código.
+
+## Ruta HA
+
+El plan operativo completo para Kubernetes, Docker Swarm fallback, MongoDB replica set, Patroni/etcd/HAProxy, backups, observabilidad y Power BI está en `docs/14_plan_ha_kubernetes_swarm_powerbi.md`.
