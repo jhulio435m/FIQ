@@ -30,10 +30,6 @@ Dejar GitHub Actions preparado para:
 - `BACKUP_RETENTION_DAYS`: retención, por ejemplo `14`.
 - `POSTGRES_BACKUP_URL`: URL PostgreSQL para `pg_dump`.
 - `MONGO_BACKUP_URI`: URI MongoDB para `mongodump`.
-- `RESTIC_REPOSITORY`: repositorio restic para snapshots externos, opcional.
-- `RESTIC_PASSWORD`: contraseña del repositorio restic, opcional.
-- `SNAPSHOT_PATHS`: rutas remotas a snapshotear, opcional; por defecto `BACKUP_ROOT`.
-- `SNAPSHOT_TAGS`: tags restic, opcional; por defecto `fiq,production`.
 
 ### Deploy Kubernetes
 
@@ -63,9 +59,6 @@ gh secret set BACKUP_ROOT --body "/var/backups/fiq"
 gh secret set BACKUP_RETENTION_DAYS --body "14"
 gh secret set POSTGRES_BACKUP_URL --body "postgresql://USER:PASSWORD@10.77.0.1:5432/fiq_db"
 gh secret set MONGO_BACKUP_URI --body "mongodb://USER:PASSWORD@10.77.0.1:27017/fiq_events?replicaSet=fiq-rs&authSource=admin"
-gh secret set RESTIC_REPOSITORY --body "s3:https://s3.example.edu.pe/fiq-restic"
-gh secret set RESTIC_PASSWORD --body "RESTIC_PASSWORD_SEGURA"
-gh secret set SNAPSHOT_PATHS --body "/var/backups/fiq"
 
 # Solo si GitHub Actions debe entrar a una IP Tailscale 100.x:
 gh secret set TAILSCALE_AUTHKEY --body "tskey-auth-..."
@@ -93,6 +86,15 @@ En el host remoto:
 bash deploy_scripts/restore_verify.sh /var/backups/fiq/<timestamp>
 ```
 
-El job falla si no se configura al menos `POSTGRES_BACKUP_URL` o `MONGO_BACKUP_URI`; esto evita ejecuciones exitosas sin dumps reales. Los snapshots restic son opcionales y solo se ejecutan cuando existen `RESTIC_REPOSITORY` y `RESTIC_PASSWORD`.
+El job falla si no se configura al menos `POSTGRES_BACKUP_URL` o `MONGO_BACKUP_URI`; esto evita ejecuciones exitosas sin dumps reales. No se usan snapshots externos: el respaldo queda como dumps lógicos locales bajo `BACKUP_ROOT`.
 
 La validación mínima verifica checksums. La validación completa debe restaurar en un entorno aislado y ejecutar pruebas de lectura.
+
+## Herramientas remotas
+
+El host remoto puede tener `pg_dump` y `mongodump` instalados. Si no están disponibles, `backup_datastores.sh` usa un runtime Docker-compatible como fallback:
+
+- PostgreSQL: `docker.io/library/postgres:17-alpine`
+- MongoDB: `docker.io/library/mongo:8`
+
+Esto permite ejecutar backups desde `oti`, donde ya existe Docker/Podman, sin instalar herramientas MongoDB en el host.

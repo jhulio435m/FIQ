@@ -15,6 +15,18 @@ require_cmd() {
   fi
 }
 
+container_runtime() {
+  if command -v docker >/dev/null 2>&1; then
+    echo docker
+    return
+  fi
+  if command -v podman >/dev/null 2>&1; then
+    echo podman
+    return
+  fi
+  echo ""
+}
+
 if [[ -z "${POSTGRES_BACKUP_URL:-}" && -z "${MONGO_BACKUP_URI:-}" ]]; then
   echo "At least one datastore URI is required: POSTGRES_BACKUP_URL or MONGO_BACKUP_URI" >&2
   exit 2
@@ -25,9 +37,21 @@ backup_postgres() {
     echo "Skipping PostgreSQL backup: POSTGRES_BACKUP_URL is not set"
     return
   fi
-  require_cmd pg_dump
   local outfile="${workdir}/postgres_fiq_${timestamp}.dump"
-  pg_dump --format=custom --no-owner --no-acl --file="${outfile}" "${POSTGRES_BACKUP_URL}"
+  if command -v pg_dump >/dev/null 2>&1; then
+    pg_dump --format=custom --no-owner --no-acl --file="${outfile}" "${POSTGRES_BACKUP_URL}"
+  else
+    local runtime
+    runtime="$(container_runtime)"
+    if [[ -z "${runtime}" ]]; then
+      echo "Missing pg_dump and no Docker-compatible runtime found" >&2
+      exit 1
+    fi
+    "${runtime}" run --rm \
+      -v "${workdir}:/backup" \
+      docker.io/library/postgres:17-alpine \
+      pg_dump --format=custom --no-owner --no-acl --file="/backup/$(basename "${outfile}")" "${POSTGRES_BACKUP_URL}"
+  fi
   sha256sum "${outfile}" > "${outfile}.sha256"
 }
 
@@ -36,9 +60,21 @@ backup_mongo() {
     echo "Skipping MongoDB backup: MONGO_BACKUP_URI is not set"
     return
   fi
-  require_cmd mongodump
   local outdir="${workdir}/mongo_fiq_${timestamp}"
-  mongodump --uri="${MONGO_BACKUP_URI}" --out="${outdir}"
+  if command -v mongodump >/dev/null 2>&1; then
+    mongodump --uri="${MONGO_BACKUP_URI}" --out="${outdir}"
+  else
+    local runtime
+    runtime="$(container_runtime)"
+    if [[ -z "${runtime}" ]]; then
+      echo "Missing mongodump and no Docker-compatible runtime found" >&2
+      exit 1
+    fi
+    "${runtime}" run --rm \
+      -v "${workdir}:/backup" \
+      docker.io/library/mongo:8 \
+      mongodump --uri="${MONGO_BACKUP_URI}" --out="/backup/$(basename "${outdir}")"
+  fi
   tar -C "${workdir}" -czf "${outdir}.tar.gz" "$(basename "${outdir}")"
   rm -rf "${outdir}"
   sha256sum "${outdir}.tar.gz" > "${outdir}.tar.gz.sha256"

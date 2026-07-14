@@ -38,7 +38,6 @@ jobs:
       - name: Upload backup script
         run: |
           scp deploy_scripts/backup_datastores.sh fiq-deploy-target:/tmp/fiq_backup_datastores.sh
-          scp deploy_scripts/snapshot_repository.sh fiq-deploy-target:/tmp/fiq_snapshot_repository.sh
 
       - name: Run remote backup
         env:
@@ -53,19 +52,3 @@ jobs:
              POSTGRES_BACKUP_URL='${POSTGRES_BACKUP_URL}' \
              MONGO_BACKUP_URI='${MONGO_BACKUP_URI}' \
              bash /tmp/fiq_backup_datastores.sh"
-
-      - name: Run optional remote snapshot
-        env:
-          BACKUP_ROOT: ${{ secrets.BACKUP_ROOT }}
-          RESTIC_REPOSITORY: ${{ secrets.RESTIC_REPOSITORY }}
-          RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
-          SNAPSHOT_PATHS: ${{ secrets.SNAPSHOT_PATHS }}
-          SNAPSHOT_TAGS: ${{ secrets.SNAPSHOT_TAGS }}
-        run: |
-          ssh fiq-deploy-target \
-            "BACKUP_ROOT='${BACKUP_ROOT:-/var/backups/fiq}' \
-             RESTIC_REPOSITORY='${RESTIC_REPOSITORY}' \
-             RESTIC_PASSWORD='${RESTIC_PASSWORD}' \
-             SNAPSHOT_PATHS='${SNAPSHOT_PATHS}' \
-             SNAPSHOT_TAGS='${SNAPSHOT_TAGS:-fiq,production}' \
-             bash /tmp/fiq_snapshot_repository.sh"

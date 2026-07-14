@@ -161,6 +161,7 @@ Los resultados externos se normalizan a metadatos comunes: titulo, autores, edit
 - [API](./docs/05_especificacion_api.md)
 - [Plan HA, Kubernetes/Swarm y dashboards externos](./docs/14_plan_ha_kubernetes_swarm_powerbi.md)
 - [Backups y CI/CD con GitHub Actions](./docs/15_backups_ci_cd_github.md)
+- [Integración MongoDB Atlas](./docs/16_mongodb_atlas.md)
 - [Seguridad de uploads](./docs/09_seguridad_uploads.md)
 - [Roles y permisos](./docs/10_roles_permisos.md)
 - [Pruebas](./docs/11_pruebas.md)

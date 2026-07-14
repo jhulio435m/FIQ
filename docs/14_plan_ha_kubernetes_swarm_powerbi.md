@@ -81,7 +81,7 @@ Objetivo: replica set de 3 miembros en nodos distintos.
 - TLS interno si el clúster cruza redes no confiables.
 - Usuario app con permisos mínimos sobre `fiq_events`.
 - Usuario backup solo lectura.
-- Backups con `mongodump --oplog` o snapshots consistentes.
+- Backups lógicos con `mongodump` y restore test mensual.
 - Restore test mensual en entorno aislado.
 
 ### Fase 3: PostgreSQL HA
