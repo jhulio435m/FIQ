@@ -1,0 +1,11 @@
+[Unit]
+Description=Run FIQ external endpoint watcher every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=15s
+Unit=fiq-watcher.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,16 @@
+[Unit]
+Description=FIQ external endpoint watcher
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/fiq-watcher/watcher.env
+ExecStart=/opt/fiq-watcher/watch_fiq_endpoints.sh /etc/fiq-watcher/watcher.env
+User=fiq-watcher
+Group=fiq-watcher
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/tmp /var/log/fiq-watcher /var/lib/fiq-watcher

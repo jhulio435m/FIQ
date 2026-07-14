@@ -10,21 +10,27 @@ Kubernetes y Docker Swarm no se deben mezclar como un único plano de control. P
 
 ## Topología Real Seleccionada
 
-El clúster HA se planifica con tres nodos:
+El clúster HA se planifica con tres nodos de capacidad suficiente y un watcher externo:
 
 | Nodo | Host | Acceso | Rol previsto | IP privada objetivo |
 | :--- | :--- | :--- | :--- | :--- |
-| `fiq-node-1` | `167.234.255.122` | `jhulio@167.234.255.122` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.1` |
-| `fiq-node-2` | `100.79.244.99` | `oti@100.79.244.99` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.2` |
+| `fiq-node-1` | `100.79.244.99` | `oti@100.79.244.99` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.1` |
+| `fiq-node-2` | `147.224.242.204` | `ubuntu@147.224.242.204` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.2` |
 | `fiq-node-3` | `arch` local | este equipo, Tailscale `100.126.122.28` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.3` |
+| `fiq-watcher-1` | `167.234.255.122` | `jhulio@167.234.255.122` | Watcher externo, health checks, alertas | `10.77.0.10` opcional |
 
 Esta topología sí permite quorum de 3 miembros para Kubernetes/etcd, Patroni y MongoDB, siempre que el nodo local permanezca encendido y conectado. Si `fiq-node-3` no puede estar disponible de forma estable, el tercer nodo debe moverse a un VPS dedicado.
 
+`fiq-watcher-1` no debe alojar datos ni control-plane: tiene `sudo`, pero solo cerca de 1 GiB RAM. Su valor es monitoreo externo y alerta temprana.
+
 Estado operativo inicial:
 
-- `fiq-node-2` ya tiene Tailscale y `wireguard-tools`.
+- `fiq-node-1` ya tiene Tailscale y `wireguard-tools`.
+- `fiq-node-2` tiene `sudo` sin contraseña, 4 vCPU, 23 GiB RAM y 45 GiB de disco; pendiente instalar WireGuard/k3s.
 - `fiq-node-3` ya tiene Tailscale y `wireguard-tools`.
-- `fiq-node-1` requiere acceso root/sudo para instalar WireGuard/Kubernetes; el usuario `jhulio` no tiene sudo.
+- `fiq-watcher-1` tiene `sudo`, 2 vCPU y 1 GiB RAM; usar solo para watcher.
+
+Para pruebas, se evaluó crear una VM dentro de `fiq-node-2`, pero el host no expone virtualización KVM (`vmx/svm = 0`). La alternativa de laboratorio es usar Kubernetes en contenedores con `infra/lab/oti-kubernetes/`, aceptando que no representa alta disponibilidad real.
 
 ## Arquitectura Objetivo
 
