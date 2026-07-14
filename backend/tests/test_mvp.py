@@ -563,3 +563,79 @@ async def test_powerbi_document_metrics_requires_api_key(
     )
 
     assert response.status_code == 401
+
+
+async def test_looker_studio_schema_requires_api_key(
+    client: AsyncClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(reports_router.settings, "DASHBOARD_API_KEY", "test-key")
+
+    response = await client.get(
+        "/reports/public/looker-studio/schema/resources",
+        params={"api_key": "wrong-key"},
+    )
+
+    assert response.status_code == 401
+
+
+async def test_looker_studio_resources_returns_flat_rows(
+    client: AsyncClient,
+    db: AsyncSession,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(reports_router.settings, "DASHBOARD_API_KEY", "test-key")
+    ids = await seed_reference_data(db)
+    db.add(
+        Recurso(
+            titulo="Balance Data Studio",
+            resumen="Dataset de prueba",
+            url_archivo="resources/balance-ds.pdf",
+            archivo_size=1024,
+            archivo_mime="application/pdf",
+            tipo_recurso_id=1,
+            subido_por=ids["teacher_id"],
+            estado_id=2,
+            curso_id=1,
+            visualizaciones=7,
+            descargas=3,
+            anio=2026,
+        )
+    )
+    await db.commit()
+
+    schema_response = await client.get(
+        "/reports/public/looker-studio/schema/resources",
+        params={"api_key": "test-key"},
+    )
+    data_response = await client.get(
+        "/reports/public/looker-studio/data/resources",
+        params={"api_key": "test-key"},
+    )
+
+    assert schema_response.status_code == 200
+    assert data_response.status_code == 200
+    assert schema_response.json()["fields"][0]["name"] == "id"
+    rows = data_response.json()["rows"]
+    assert rows[0]["titulo"] == "Balance Data Studio"
+    assert rows[0]["visualizaciones"] == 7
+    assert rows[0]["created_date"]
+
+
+async def test_looker_studio_users_omits_email(
+    client: AsyncClient,
+    db: AsyncSession,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(reports_router.settings, "DASHBOARD_API_KEY", "test-key")
+    await seed_reference_data(db)
+
+    response = await client.get(
+        "/reports/public/looker-studio/data/users",
+        params={"api_key": "test-key"},
+    )
+
+    assert response.status_code == 200
+    row = response.json()["rows"][0]
+    assert "email" not in row
+    assert row["rol"] in {"Admin", "Docente", "Estudiante"}

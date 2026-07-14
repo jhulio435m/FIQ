@@ -1,4 +1,4 @@
-# 14. Plan de Producción HA, Kubernetes/Swarm y Power BI
+# 14. Plan de Producción HA, Kubernetes/Swarm y Dashboards Externos
 
 ## Decisión de Orquestación
 
@@ -47,7 +47,7 @@ flowchart TD
     Backend --> Redis[(Redis)]
     Backend --> ObjectStorage[(S3 / MinIO)]
 
-    Backend --> PowerBI[API publica Power BI]
+    Backend --> Dashboards[API publica Power BI / Looker Studio]
     PostgresHA --> Backups[Backups + Restore Tests]
     MongoRS --> Backups
     ObjectStorage --> Backups
@@ -61,7 +61,7 @@ flowchart TD
 - `compose.yaml` local con PostgreSQL, MongoDB, Redis, MinIO, backend y frontend.
 - PostgreSQL HA iniciado con Patroni/etcd/HAProxy en `ha-database/`.
 - MongoDB documental para `activity_events` y `external_catalog_cache`.
-- API Power BI con `/reports/public/*` protegida por `DASHBOARD_API_KEY`.
+- API para Power BI y Looker Studio/Data Studio con `/reports/public/*` protegida por `DASHBOARD_API_KEY`.
 
 ### Fase 1: Hardening de Configuración
 
@@ -140,9 +140,9 @@ Mínimo aceptable:
 - Alertas: API caída, error 5XX alto, disco > 80%, backup fallido, replica lag, Mongo primary no disponible.
 - Dashboard técnico separado del dashboard académico Power BI.
 
-### Fase 7: Power BI
+### Fase 7: Power BI y Looker Studio
 
-No conectar Power BI directo a PostgreSQL ni MongoDB. Usar API pública controlada:
+No conectar Power BI ni Looker Studio directo a PostgreSQL o MongoDB. Usar API pública controlada:
 
 - `GET /reports/public/dashboard-data`
 - `GET /reports/public/resources`
@@ -150,6 +150,9 @@ No conectar Power BI directo a PostgreSQL ni MongoDB. Usar API pública controla
 - `GET /reports/public/users`
 - `GET /reports/public/activities`
 - `GET /reports/public/document-metrics`
+- `GET /reports/public/looker-studio/tables`
+- `GET /reports/public/looker-studio/schema/{table_name}`
+- `GET /reports/public/looker-studio/data/{table_name}`
 
 Seguridad:
 
@@ -168,6 +171,15 @@ Modelo Power BI:
 - Tabla `document_metrics.external_catalog_cache.by_kind`: búsquedas externas por tipo.
 - Tabla `document_metrics.external_catalog_cache.recent`: snapshots recientes del cache externo.
 
+Modelo Looker Studio/Data Studio:
+
+- Tabla `summary`: métricas globales en formato clave/valor.
+- Tabla `resources`: recursos con dimensiones planas y fecha `YYYYMMDD`.
+- Tabla `courses`: cursos.
+- Tabla `users`: usuarios sin email para reducir exposición de datos personales.
+- Tabla `activities`: eventos con `cantidad=1` para agregación.
+- Tablas Mongo planas: `document_activity_by_type`, `document_activity_by_date`, `external_cache_by_kind`, `external_cache_recent`.
+
 ## Criterios de Listo
 
 - `docker compose config` sin warnings.
@@ -175,6 +187,6 @@ Modelo Power BI:
 - `npm run openapi:check` pasando.
 - Secretos fuera del repo.
 - Backups ejecutados y restore probado.
-- Endpoint Power BI con API key y dataset validado.
+- Endpoint Power BI/Looker Studio con API key y dataset validado.
 - Runbook de failover PostgreSQL y MongoDB.
 - Monitoreo con alertas probadas.

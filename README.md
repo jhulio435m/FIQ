@@ -36,7 +36,7 @@ Variables principales:
 - `S3_BUCKET_NAME`
 - `CORS_ORIGINS`
 - `MAX_UPLOAD_SIZE`
-- `DASHBOARD_API_KEY` para endpoints `/reports/public/*`
+- `DASHBOARD_API_KEY` para endpoints `/reports/public/*`, Power BI y Looker Studio/Data Studio.
 - `EXTERNAL_API_EMAIL` para uso identificado de OpenAlex/Crossref y habilitar Unpaywall.
 - `EXTERNAL_API_USER_AGENT` para identificar la plataforma ante APIs bibliograficas abiertas.
 - `EXTERNAL_CACHE_TTL_SECONDS` para controlar la vida util del cache Mongo de catalogo externo.
@@ -159,7 +159,7 @@ Los resultados externos se normalizan a metadatos comunes: titulo, autores, edit
 ## Documentacion
 
 - [API](./docs/05_especificacion_api.md)
-- [Plan HA, Kubernetes/Swarm y Power BI](./docs/14_plan_ha_kubernetes_swarm_powerbi.md)
+- [Plan HA, Kubernetes/Swarm y dashboards externos](./docs/14_plan_ha_kubernetes_swarm_powerbi.md)
 - [Backups y CI/CD con GitHub Actions](./docs/15_backups_ci_cd_github.md)
 - [Seguridad de uploads](./docs/09_seguridad_uploads.md)
 - [Roles y permisos](./docs/10_roles_permisos.md)

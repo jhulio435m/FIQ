@@ -62,6 +62,9 @@ Contrato REST real generado por FastAPI y verificado con `npm run openapi:check`
 | `GET /reports/public/users` | API key | Usuarios para dashboard externo. |
 | `GET /reports/public/activities` | API key | Actividades para dashboard externo. |
 | `GET /reports/public/document-metrics` | API key | Métricas documentales MongoDB agregadas para Power BI. |
+| `GET /reports/public/looker-studio/tables` | API key | Tablas disponibles para Looker Studio/Data Studio. |
+| `GET /reports/public/looker-studio/schema/{table_name}` | API key | Esquema tabular para Looker Studio/Data Studio. |
+| `GET /reports/public/looker-studio/data/{table_name}` | API key | Filas planas para Looker Studio/Data Studio. |
 
 ## Payloads Principales
 
@@ -244,9 +247,11 @@ Campos registrados: usuario, tipo, fecha/hora, IP, user agent y detalle JSON con
 
 `GET /activity/events` consulta la colección MongoDB `activity_events` cuando `MONGO_ENABLED=true`. Devuelve documentos enriquecidos con `sql_activity_id`, `usuario_id`, `tipo_actividad`, `occurred_at`, IP, user agent y `detalle_accion`. Si MongoDB no está configurado, responde `503`.
 
-## Power BI
+## Power BI y Looker Studio
 
 Los endpoints `/reports/public/*` usan `DASHBOARD_API_KEY`. `GET /reports/public/document-metrics` devuelve agregados de MongoDB para `activity_events` y `external_catalog_cache`; si MongoDB no está inicializado, responde con `mongo_enabled=false` y colecciones vacías para que Power BI mantenga un esquema estable.
+
+Para Looker Studio/Data Studio se exponen tablas planas bajo `/reports/public/looker-studio/*`. Estas rutas separan esquema y datos para que un Community Connector pueda implementar `getSchema()` y `getData()` sin interpretar JSON anidado.
 
 ## Verificacion
 
