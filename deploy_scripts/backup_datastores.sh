@@ -15,6 +15,11 @@ require_cmd() {
   fi
 }
 
+if [[ -z "${POSTGRES_BACKUP_URL:-}" && -z "${MONGO_BACKUP_URI:-}" ]]; then
+  echo "At least one datastore URI is required: POSTGRES_BACKUP_URL or MONGO_BACKUP_URI" >&2
+  exit 2
+fi
+
 backup_postgres() {
   if [[ -z "${POSTGRES_BACKUP_URL:-}" ]]; then
     echo "Skipping PostgreSQL backup: POSTGRES_BACKUP_URL is not set"

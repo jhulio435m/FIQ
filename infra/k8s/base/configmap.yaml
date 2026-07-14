@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fiq-config
+  namespace: fiq
+data:
+  PROJECT_NAME: FIQ Plataforma Digital
+  REDIS_URL: redis://redis:6379/0
+  MONGO_ENABLED: "true"
+  MONGO_DB_NAME: fiq_events
+  S3_BUCKET_NAME: fiq-recursos
+  CORS_ORIGINS: '["https://fiq.example.edu.pe"]'

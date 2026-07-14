@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: datastore-backup
+  namespace: fiq
+spec:
+  schedule: "17 7 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: ghcr.io/jhulio435m/fiq-backup-tools:latest
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: BACKUP_ROOT
+                  value: /backups/fiq
+                - name: BACKUP_RETENTION_DAYS
+                  value: "14"
+                - name: POSTGRES_BACKUP_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: fiq-backup-secrets
+                      key: POSTGRES_BACKUP_URL
+                - name: MONGO_BACKUP_URI
+                  valueFrom:
+                    secretKeyRef:
+                      name: fiq-backup-secrets
+                      key: MONGO_BACKUP_URI
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: fiq-backups

@@ -36,3 +36,9 @@ infra/k8s/
 - `fiq-watcher-1`: `167.234.255.122`, watcher externo; no participa en quorum.
 
 Para Kubernetes HA se recomienda `k3s` o `kubeadm` con 3 servers/control-plane. No iniciar el clúster hasta que WireGuard esté activo en los tres nodos y `10.77.0.1/2/3` respondan entre sí.
+
+Los manifiestos base ya declaran alta disponibilidad para la capa stateless:
+
+- `frontend`: 3 réplicas en producción, rolling update con `maxUnavailable=0`, HPA 3-8 y PDB `minAvailable=2`.
+- `backend`: 2 réplicas en producción, rolling update con `maxUnavailable=0`, HPA 2-6 y PDB `minAvailable=1`.
+- Los overlays `staging` y `production` son aplicables con `kubectl apply -k infra/k8s/overlays/<entorno>`.
