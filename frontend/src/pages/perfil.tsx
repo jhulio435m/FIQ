@@ -73,7 +73,7 @@ export default function Perfil() {
     <div className="max-w-2xl mx-auto py-10 px-4 animate-fade-in">
       <Card>
         <CardHeader>
-          <CardTitle className="text-2xl text-brand-900 flex items-center gap-2">
+          <CardTitle className="text-2xl text-brand-900 dark:text-brand-100 flex items-center gap-2">
             <User className="h-6 w-6" /> Mi Perfil
           </CardTitle>
           <CardDescription>
@@ -88,7 +88,7 @@ export default function Perfil() {
           })} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="nombre" className="flex items-center gap-2">
-                <User className="h-4 w-4 text-gray-400" /> Nombre Completo
+                <User className="h-4 w-4 text-gray-400 dark:text-zinc-500" /> Nombre Completo
               </Label>
               <Input id="nombre" {...form.register("nombre")} />
               {form.formState.errors.nombre && (
@@ -98,7 +98,7 @@ export default function Perfil() {
 
             <div className="space-y-2">
               <Label htmlFor="email" className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-gray-400" /> Correo Institucional
+                <Mail className="h-4 w-4 text-gray-400 dark:text-zinc-500" /> Correo Institucional
               </Label>
               <Input id="email" type="email" {...form.register("email")} />
               {form.formState.errors.email && (
@@ -108,7 +108,7 @@ export default function Perfil() {
 
             <div className="space-y-2">
               <Label htmlFor="password" className="flex items-center gap-2">
-                <Lock className="h-4 w-4 text-gray-400" /> Nueva Contraseña (Opcional)
+                <Lock className="h-4 w-4 text-gray-400 dark:text-zinc-500" /> Nueva Contraseña (Opcional)
               </Label>
               <Input id="password" type="password" placeholder="Dejar en blanco para no cambiar" {...form.register("password")} />
               {form.formState.errors.password && (

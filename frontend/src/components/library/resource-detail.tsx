@@ -256,7 +256,7 @@ export function ResourceDetail({ resource, open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl w-[98vw] h-[95vh] sm:max-w-7xl p-0 overflow-hidden flex flex-col md:flex-row animate-fade-in-scale gap-0 border-zinc-200">
+      <DialogContent className="max-w-7xl w-[98vw] h-[95vh] sm:max-w-7xl p-0 overflow-hidden flex flex-col md:flex-row animate-fade-in-scale gap-0 border-zinc-200 dark:border-zinc-800">
         
         {/* Left Area: PDF Viewer (Center of Mendeley layout) */}
         <div className="flex-1 h-full bg-zinc-950 overflow-hidden flex flex-col min-w-0">
@@ -275,7 +275,7 @@ export function ResourceDetail({ resource, open, onOpenChange }: Props) {
         </div>
 
         {/* Right Area: Metadata & Citations (Right-pane of Mendeley layout) */}
-        <div className="w-full md:w-96 border-t md:border-t-0 md:border-l border-gray-200 p-6 flex flex-col justify-between bg-white overflow-y-auto shrink-0 md:h-full">
+        <div className="w-full md:w-96 border-t md:border-t-0 md:border-l border-gray-200 dark:border-zinc-800 p-6 flex flex-col justify-between bg-white dark:bg-zinc-950 overflow-y-auto shrink-0 md:h-full">
           {isEditing ? (
             /* Editing State view */
             <div className="space-y-5 flex-1 flex flex-col justify-between h-full">
@@ -507,20 +507,20 @@ export function ResourceDetail({ resource, open, onOpenChange }: Props) {
               </div>
 
               {/* Citation Card (Mendeley style) */}
-              <div className="space-y-3 border-t pt-4">
+              <div className="space-y-3 border-t border-border pt-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <h4 className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wider">
                     Citar Recurso
                   </h4>
-                  <div className="flex bg-gray-100 p-0.5 rounded-md animate-none">
+                  <div className="flex bg-gray-100 dark:bg-zinc-800 p-0.5 rounded-md animate-none">
                     {(["APA", "IEEE", "VANCOUVER"] as const).map((format) => (
                       <button
                         key={format}
                         onClick={() => setCitationFormat(format)}
                         className={`text-3xs font-bold px-2 py-1 rounded-sm cursor-pointer transition-all ${
                           citationFormat === format
-                            ? "bg-white text-brand-700 shadow-xs"
-                            : "text-gray-500 hover:text-gray-900"
+                            ? "bg-white dark:bg-zinc-950 text-brand-700 dark:text-brand-400 shadow-xs"
+                            : "text-gray-500 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                         }`}
                       >
                         {format}
@@ -529,8 +529,8 @@ export function ResourceDetail({ resource, open, onOpenChange }: Props) {
                   </div>
                 </div>
 
-                <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 relative group/citation">
-                  <p className="text-2xs text-zinc-600 leading-relaxed font-mono select-all pr-6">
+                <div className="bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 relative group/citation">
+                  <p className="text-2xs text-zinc-600 dark:text-zinc-300 leading-relaxed font-mono select-all pr-6">
                     {getCitationText()}
                   </p>
                   <button

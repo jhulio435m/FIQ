@@ -1,0 +1,59 @@
+scope: fiq_cluster
+namespace: /db/
+
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: ${PATRONI_RESTAPI_CONNECT_ADDRESS}
+
+etcd3:
+  hosts: ${PATRONI_ETCD3_HOSTS}
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    postgresql:
+      use_pg_rewind: false
+      use_slots: true
+      parameters:
+        wal_level: replica
+        hot_standby: "on"
+        wal_keep_size: 128MB
+        max_wal_senders: 10
+        max_replication_slots: 10
+        checkpoint_timeout: 30s
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+  pg_hba:
+    - host replication replicator 127.0.0.1/32 md5
+    - host replication replicator all md5
+    - host all all all md5
+
+  users:
+    postgres:
+      password: ${PATRONI_SUPERUSER_PASSWORD}
+      options:
+        - superuser
+    replicator:
+      password: ${PATRONI_REPLICATION_PASSWORD}
+      options:
+        - replication
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: ${PATRONI_POSTGRESQL_CONNECT_ADDRESS}
+  data_dir: /home/postgres/pgdata/data
+  bin_dir: /usr/lib/postgresql/15/bin
+  pgpass: /tmp/pgpass
+  authentication:
+    superuser:
+      username: postgres
+      password: ${PATRONI_SUPERUSER_PASSWORD}
+    replication:
+      username: replicator
+      password: ${PATRONI_REPLICATION_PASSWORD}
+  parameters:
+    unix_socket_directories: '.'

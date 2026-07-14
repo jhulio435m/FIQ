@@ -1,4 +1,6 @@
+import re
 import uuid
+from pathlib import Path
 
 import aioboto3
 from fastapi import UploadFile
@@ -17,9 +19,16 @@ class S3Service:
         }
         self.bucket_name = settings.S3_BUCKET_NAME
 
+    @staticmethod
+    def sanitize_filename(file_name: str | None) -> str:
+        original_name = file_name or "resource.pdf"
+        basename = Path(original_name).name
+        safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", basename).strip("._")
+        return safe_name or "resource.pdf"
+
     async def generate_presigned_post(self, file_name: str, folder: str = "resources", expiration: int = 3600):
         """Generate a presigned POST URL for direct browser upload"""
-        key = f"{folder}/{uuid.uuid4()}_{file_name}"
+        key = f"{folder}/{uuid.uuid4()}_{self.sanitize_filename(file_name)}"
         async with self.session.client(**self.config) as s3:
             try:
                 response = await s3.generate_presigned_post(
@@ -53,9 +62,9 @@ class S3Service:
                 print(f"Error generating presigned URL: {e}")
                 return ""
 
-    async def upload_file(self, file: UploadFile, folder: str = "resources") -> str:
+    async def upload_file(self, file: UploadFile, folder: str = "resources", safe_filename: str | None = None) -> str:
         """Upload a FastAPI UploadFile to object storage and return its object key."""
-        safe_name = file.filename or "resource.pdf"
+        safe_name = safe_filename or self.sanitize_filename(file.filename)
         key = f"{folder}/{uuid.uuid4()}_{safe_name}"
         async with self.session.client(**self.config) as s3:
             try:

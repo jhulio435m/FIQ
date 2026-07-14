@@ -17,6 +17,10 @@ from app.core.security import hash_password
 
 async def seed():
     async with engine.begin() as conn:
+        # Ensure tables exist
+        print("Ensuring tables exist...")
+        await conn.run_sync(SQLModel.metadata.create_all)
+
         print("Cleaning database (TRUNCATE)...")
         # Truncate all tables to start fresh
         tables = [
@@ -30,9 +34,6 @@ async def seed():
                 await conn.execute(text(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE"))
             except Exception as e:
                 print(f"Skipping truncate for {table}: {e}")
-        
-        # Ensure tables exist
-        await conn.run_sync(SQLModel.metadata.create_all)
 
     async with async_session_maker() as db:
         print("Seeding roles...")
@@ -92,6 +93,8 @@ async def seed():
             TipoActividad(id=5, nombre="view"),
             TipoActividad(id=6, nombre="lab_access"),
             TipoActividad(id=7, nombre="resource_approve"),
+            TipoActividad(id=8, nombre="resource_archive"),
+            TipoActividad(id=9, nombre="upload_rejected"),
         ]
         db.add_all(actividades)
 
@@ -149,10 +152,19 @@ async def seed():
             s3_client.create_bucket(Bucket=settings.S3_BUCKET_NAME)
         except:
             pass
+        existing_objects = s3_client.list_objects_v2(Bucket=settings.S3_BUCKET_NAME)
+        if "Contents" in existing_objects:
+            s3_client.delete_objects(
+                Bucket=settings.S3_BUCKET_NAME,
+                Delete={
+                    "Objects": [
+                        {"Key": item["Key"]} for item in existing_objects["Contents"]
+                    ]
+                },
+            )
 
         seed_files = [
-            ("seed_files/guia_estequiometria.pdf", "Guía de Estequiometría", 3, 1),
-            ("seed_files/manual_operaciones.pdf", "Manual de Operaciones Unitarias", 2, 2),
+            ("seed_files/documento_de_prueba.pdf", "Documento de prueba", 1, 1),
         ]
 
         # Re-fetch admin to avoid detached state

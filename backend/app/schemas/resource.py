@@ -74,3 +74,19 @@ class RecursoUpdate(SQLModel):
     editorial: Optional[str] = None
     doi: Optional[str] = None
     anio: Optional[int] = None
+
+
+class ExternalResourceImport(SQLModel):
+    source: str
+    external_id: str
+    titulo: str
+    tipo_recurso_id: int
+    resumen: Optional[str] = None
+    curso_id: Optional[int] = None
+    autores: Optional[str] = None
+    editorial: Optional[str] = None
+    doi: Optional[str] = None
+    anio: Optional[int] = None
+    external_url: Optional[str] = None
+    open_access_url: Optional[str] = None
+    cover_url: Optional[str] = None

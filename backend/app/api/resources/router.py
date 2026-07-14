@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi.responses import RedirectResponse
 from sqlalchemy import or_
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from typing import List, Optional
 from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import quote
 
 from app.core.database import get_db
 from app.core.users import current_active_user, get_optional_user
@@ -20,10 +23,14 @@ from app.schemas.resource import (
     RecursoUpdate,
     ResourceModeration,
     TipoRecursoRead,
+    ExternalResourceImport,
 )
 from app.logs.crud import log_activity
 
 router = APIRouter()
+
+PDF_MIME_TYPES = {"application/pdf", "application/x-pdf"}
+PDF_EXTENSION = ".pdf"
 
 
 async def _activity_type(db: AsyncSession, name: str) -> TipoActividad | None:
@@ -59,11 +66,55 @@ async def _resource_list_payload(db: AsyncSession, recursos: list[Recurso]) -> l
     return [await _resource_payload(db, recurso) for recurso in recursos]
 
 
-def _assert_pdf(file: UploadFile, first_bytes: bytes) -> None:
-    if file.content_type != "application/pdf":
+def _safe_upload_filename(filename: str | None) -> str:
+    if not filename:
+        raise HTTPException(status_code=422, detail="El archivo debe incluir nombre")
+    basename = Path(filename).name
+    if basename != filename or ".." in Path(filename).parts:
+        raise HTTPException(status_code=422, detail="Nombre de archivo no permitido")
+    suffixes = [suffix.lower() for suffix in Path(basename).suffixes]
+    if suffixes != [PDF_EXTENSION]:
+        raise HTTPException(status_code=415, detail="Solo se permiten archivos PDF con extensión .pdf")
+    return s3_service.sanitize_filename(basename)
+
+
+def _assert_pdf_upload(file: UploadFile, content: bytes) -> str:
+    safe_name = _safe_upload_filename(file.filename)
+    if file.content_type not in PDF_MIME_TYPES:
         raise HTTPException(status_code=415, detail="Solo se permiten archivos PDF")
-    if not first_bytes.startswith(b"%PDF"):
+    if not content:
+        raise HTTPException(status_code=422, detail="El archivo está vacío")
+    if len(content) > settings.MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="El archivo excede el tamaño máximo permitido")
+    if not content.startswith(b"%PDF"):
         raise HTTPException(status_code=415, detail="El archivo no es un PDF válido")
+    if b"%%EOF" not in content[-2048:]:
+        raise HTTPException(status_code=422, detail="El archivo PDF está corrupto o incompleto")
+    return safe_name
+
+
+async def _log_upload_rejected(
+    db: AsyncSession,
+    request: Request,
+    user: User,
+    reason: str,
+    filename: str | None,
+) -> None:
+    tipo = await _activity_type(db, "upload_rejected")
+    if not tipo:
+        return
+    await log_activity(
+        db,
+        usuario_id=user.id,
+        tipo_actividad_id=tipo.id,
+        ip_origen=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        detalle_accion={
+            "resultado": "fallido",
+            "motivo": reason,
+            "archivo": s3_service.sanitize_filename(filename),
+        },
+    )
 
 
 @router.get("/types", response_model=List[TipoRecursoRead])
@@ -118,16 +169,15 @@ async def upload_resource(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("Docente", "Admin")),
 ):
-    first_bytes = await file.read(4)
-    _assert_pdf(file, first_bytes)
-    await file.seek(0)
-
     content = await file.read()
-    if len(content) > settings.MAX_UPLOAD_SIZE:
-        raise HTTPException(status_code=413, detail="El archivo excede 20MB")
+    try:
+        safe_name = _assert_pdf_upload(file, content)
+    except HTTPException as exc:
+        await _log_upload_rejected(db, request, user, str(exc.detail), file.filename)
+        raise
     await file.seek(0)
 
-    key = await s3_service.upload_file(file)
+    key = await s3_service.upload_file(file, safe_filename=safe_name)
     pending_id = await _state_id(db, "Pendiente")
     recurso = Recurso(
         titulo=titulo,
@@ -171,6 +221,11 @@ async def init_upload(
     """Initializes a professional S3 direct upload"""
     if data.file_size > 20 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="El archivo excede 20MB")
+    if data.file_size <= 0:
+        raise HTTPException(status_code=422, detail="El archivo está vacío")
+    if data.file_mime not in PDF_MIME_TYPES:
+        raise HTTPException(status_code=415, detail="Solo se permiten archivos PDF")
+    _safe_upload_filename(data.file_name)
     
     # 1. Generate Presigned Post
     post_data, key = await s3_service.generate_presigned_post(data.file_name)
@@ -220,6 +275,74 @@ async def init_upload(
     }
 
 
+@router.post("/import-external", response_model=RecursoRead, status_code=201)
+async def import_external_resource(
+    request: Request,
+    data: ExternalResourceImport,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("Docente", "Admin")),
+):
+    if data.doi:
+        existing_result = await db.execute(select(Recurso).where(Recurso.doi == data.doi))
+        if existing_result.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Ya existe un recurso con ese DOI")
+
+    tipo = await db.get(TipoRecurso, data.tipo_recurso_id)
+    if not tipo:
+        raise HTTPException(status_code=422, detail="Tipo de recurso no válido")
+    if data.curso_id and not await db.get(Curso, data.curso_id):
+        raise HTTPException(status_code=422, detail="Curso no válido")
+
+    pending_id = await _state_id(db, "Pendiente")
+    external_target = data.open_access_url or data.external_url
+    if not external_target:
+        external_target = f"external:{data.source}:{data.external_id}"
+
+    origin_note = (
+        f"Fuente externa: {data.source} ({data.external_id}). "
+        f"URL: {external_target}"
+    )
+    summary = data.resumen.strip() if data.resumen else ""
+    resumen = f"{summary}\n\n{origin_note}".strip()
+
+    recurso = Recurso(
+        titulo=data.titulo.strip(),
+        resumen=resumen,
+        url_archivo=external_target[:500],
+        archivo_size=0,
+        archivo_mime="text/html",
+        tipo_recurso_id=data.tipo_recurso_id,
+        subido_por=user.id,
+        estado_id=pending_id,
+        curso_id=data.curso_id,
+        autores=data.autores,
+        editorial=data.editorial,
+        doi=data.doi,
+        anio=data.anio,
+    )
+    db.add(recurso)
+    await db.commit()
+    await db.refresh(recurso)
+
+    activity = await _activity_type(db, "upload")
+    if activity:
+        await log_activity(
+            db,
+            usuario_id=user.id,
+            tipo_actividad_id=activity.id,
+            ip_origen=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            detalle_accion={
+                "resource_id": recurso.id,
+                "titulo": recurso.titulo,
+                "action": "external_import",
+                "source": data.source,
+                "external_id": data.external_id,
+            },
+        )
+    return await _resource_payload(db, recurso)
+
+
 @router.post("/{resource_id}/view", response_model=RecursoRead)
 async def track_view(
     request: Request,
@@ -257,8 +380,39 @@ async def get_resource_url(
     recurso = await db.get(Recurso, resource_id)
     if not recurso:
         raise HTTPException(status_code=404, detail="Recurso no encontrado")
-    url = await s3_service.get_presigned_url(recurso.url_archivo)
-    return {"url": url or recurso.url_archivo}
+    if recurso.url_archivo.startswith(("http://", "https://")):
+        return {"url": recurso.url_archivo}
+    return {"url": f"/api/resources/{resource_id}/file"}
+
+
+@router.get("/{resource_id}/file")
+async def get_resource_file(
+    resource_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    recurso = await db.get(Recurso, resource_id)
+    if not recurso:
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
+    if recurso.url_archivo.startswith(("http://", "https://")):
+        return RedirectResponse(recurso.url_archivo, status_code=307)
+
+    async with s3_service.session.client(**s3_service.config) as s3:
+        try:
+            obj = await s3.get_object(Bucket=s3_service.bucket_name, Key=recurso.url_archivo)
+            body = await obj["Body"].read()
+        except Exception as exc:
+            print(f"Error reading resource file from object storage: {exc}")
+            raise HTTPException(status_code=404, detail="Archivo no encontrado") from exc
+
+    filename = quote(recurso.url_archivo.rsplit("/", 1)[-1])
+    return Response(
+        content=body,
+        media_type=recurso.archivo_mime or "application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "private, max-age=300",
+        },
+    )
 
 
 @router.post("/{resource_id}/download")
@@ -287,9 +441,12 @@ async def track_download(
             detalle_accion={"resource_id": recurso.id, "titulo": recurso.titulo}
         )
 
-    # Generate professional presigned URL
-    url = await s3_service.get_presigned_url(recurso.url_archivo)
-    return {"download_url": url or recurso.url_archivo, "resource": await _resource_payload(db, recurso)}
+    download_url = (
+        recurso.url_archivo
+        if recurso.url_archivo.startswith(("http://", "https://"))
+        else f"/api/resources/{resource_id}/file"
+    )
+    return {"download_url": download_url, "resource": await _resource_payload(db, recurso)}
 
 
 @router.get("/pending", response_model=List[RecursoRead])
@@ -415,3 +572,43 @@ async def update_resource(
         )
     return await _resource_payload(db, recurso)
 
+
+@router.delete("/{resource_id}", response_model=RecursoRead)
+async def archive_resource(
+    request: Request,
+    resource_id: int,
+    data: ResourceModeration | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("Admin")),
+):
+    recurso = await db.get(Recurso, resource_id)
+    if not recurso:
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
+
+    archived_id = await _state_id(db, "Archivado")
+    previous_state = recurso.estado_id
+    recurso.estado_id = archived_id
+    recurso.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.add(
+        RecursoEstadoHistorial(
+            recurso_id=recurso.id,
+            estado_anterior_id=previous_state,
+            estado_nuevo_id=archived_id,
+            comentario=data.comentario if data else None,
+            cambiado_por=user.id,
+        )
+    )
+    await db.commit()
+    await db.refresh(recurso)
+
+    tipo = await _activity_type(db, "resource_archive")
+    if tipo:
+        await log_activity(
+            db,
+            usuario_id=user.id,
+            tipo_actividad_id=tipo.id,
+            ip_origen=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            detalle_accion={"resource_id": recurso.id, "titulo": recurso.titulo},
+        )
+    return await _resource_payload(db, recurso)

@@ -56,6 +56,11 @@ jobs:
           cd backend
           uv run --extra dev pytest
 
+      - name: Check OpenAPI documentation alignment
+        run: |
+          cd backend
+          uv run python scripts/check_openapi_docs.py
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -73,10 +78,18 @@ jobs:
           cd frontend
           npm run lint
 
+      - name: Run frontend unit tests
+        run: |
+          cd frontend
+          npm run test:unit
+
       - name: Build frontend
         run: |
           cd frontend
           npm run build
+
+      - name: Build Docker Compose stack
+        run: docker compose build
 
       - name: Install Playwright Browsers
         run: |
@@ -123,3 +136,13 @@ jobs:
         if: always()
         run: |
           docker compose down
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-failure-artifacts
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+            frontend/coverage/
