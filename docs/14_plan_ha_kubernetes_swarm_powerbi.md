@@ -8,6 +8,24 @@ Kubernetes y Docker Swarm no se deben mezclar como un único plano de control. P
 - **Docker Swarm:** alternativa operativa si el equipo necesita un clúster más simple en VPS antes de adoptar Kubernetes.
 - **Docker Compose:** entorno local y laboratorio, no frontera final de alta disponibilidad.
 
+## Topología Real Seleccionada
+
+El clúster HA se planifica con tres nodos:
+
+| Nodo | Host | Acceso | Rol previsto | IP privada objetivo |
+| :--- | :--- | :--- | :--- | :--- |
+| `fiq-node-1` | `167.234.255.122` | `jhulio@167.234.255.122` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.1` |
+| `fiq-node-2` | `100.79.244.99` | `oti@100.79.244.99` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.2` |
+| `fiq-node-3` | `arch` local | este equipo, Tailscale `100.126.122.28` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.3` |
+
+Esta topología sí permite quorum de 3 miembros para Kubernetes/etcd, Patroni y MongoDB, siempre que el nodo local permanezca encendido y conectado. Si `fiq-node-3` no puede estar disponible de forma estable, el tercer nodo debe moverse a un VPS dedicado.
+
+Estado operativo inicial:
+
+- `fiq-node-2` ya tiene Tailscale y `wireguard-tools`.
+- `fiq-node-3` ya tiene Tailscale y `wireguard-tools`.
+- `fiq-node-1` requiere acceso root/sudo para instalar WireGuard/Kubernetes; el usuario `jhulio` no tiene sudo.
+
 ## Arquitectura Objetivo
 
 ```mermaid
@@ -51,7 +69,7 @@ flowchart TD
 
 Objetivo: replica set de 3 miembros en nodos distintos.
 
-- `mongo-0`, `mongo-1`, `mongo-2` con persistencia independiente.
+- `mongo-0` en `fiq-node-1`, `mongo-1` en `fiq-node-2`, `mongo-2` en `fiq-node-3`, con persistencia independiente.
 - Autenticación obligatoria.
 - Keyfile interno para autenticación entre réplicas.
 - TLS interno si el clúster cruza redes no confiables.
@@ -64,8 +82,8 @@ Objetivo: replica set de 3 miembros en nodos distintos.
 
 Mantener Patroni/etcd/HAProxy como línea base:
 
-- 3 nodos PostgreSQL.
-- 3 nodos etcd o servicio equivalente estable.
+- 3 nodos PostgreSQL sobre `10.77.0.1`, `10.77.0.2`, `10.77.0.3`.
+- 3 nodos etcd o servicio equivalente estable sobre los mismos hosts.
 - HAProxy o PgBouncer para entrada estable.
 - Backups base + WAL archiving.
 - Restore test documentado.
