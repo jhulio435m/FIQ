@@ -24,6 +24,7 @@ Backups GitHub Actions:
 
 ```bash
 gh secret set MONGO_BACKUP_URI --body "mongodb+srv://fiq_backup:<password>@<cluster>.mongodb.net/fiq_events?retryWrites=true&w=majority&appName=FIQBackup"
+gh secret set MONGO_BACKUP_DB --body "fiq_events"
 ```
 
 Kubernetes:
@@ -64,6 +65,7 @@ Desde el host de backups:
 ```bash
 BACKUP_ROOT=/var/backups/fiq \
 MONGO_BACKUP_URI='mongodb+srv://fiq_backup:<password>@<cluster>.mongodb.net/fiq_events?retryWrites=true&w=majority' \
+MONGO_BACKUP_DB=fiq_events \
 bash /tmp/fiq_backup_datastores.sh
 ```
 

@@ -30,6 +30,7 @@ Dejar GitHub Actions preparado para:
 - `BACKUP_RETENTION_DAYS`: retención, por ejemplo `14`.
 - `POSTGRES_BACKUP_URL`: URL PostgreSQL para `pg_dump`.
 - `MONGO_BACKUP_URI`: URI MongoDB para `mongodump`.
+- `MONGO_BACKUP_DB`: base MongoDB a respaldar, por ejemplo `fiq_events`.
 
 ### Deploy Kubernetes
 
@@ -59,6 +60,7 @@ gh secret set BACKUP_ROOT --body "/var/backups/fiq"
 gh secret set BACKUP_RETENTION_DAYS --body "14"
 gh secret set POSTGRES_BACKUP_URL --body "postgresql://USER:PASSWORD@10.77.0.1:5432/fiq_db"
 gh secret set MONGO_BACKUP_URI --body "mongodb://USER:PASSWORD@10.77.0.1:27017/fiq_events?replicaSet=fiq-rs&authSource=admin"
+gh secret set MONGO_BACKUP_DB --body "fiq_events"
 
 # Solo si GitHub Actions debe entrar a una IP Tailscale 100.x:
 gh secret set TAILSCALE_AUTHKEY --body "tskey-auth-..."

@@ -61,8 +61,13 @@ backup_mongo() {
     return
   fi
   local outdir="${workdir}/mongo_fiq_${timestamp}"
+  mkdir -p "${outdir}"
+  local mongo_args=(--uri="${MONGO_BACKUP_URI}" --out="${outdir}")
+  if [[ -n "${MONGO_BACKUP_DB:-}" ]]; then
+    mongo_args+=(--db="${MONGO_BACKUP_DB}")
+  fi
   if command -v mongodump >/dev/null 2>&1; then
-    mongodump --uri="${MONGO_BACKUP_URI}" --out="${outdir}"
+    mongodump "${mongo_args[@]}"
   else
     local runtime
     runtime="$(container_runtime)"
@@ -73,7 +78,11 @@ backup_mongo() {
     "${runtime}" run --rm \
       -v "${workdir}:/backup" \
       docker.io/library/mongo:8 \
-      mongodump --uri="${MONGO_BACKUP_URI}" --out="/backup/$(basename "${outdir}")"
+      mongodump "${mongo_args[@]/${workdir}/\/backup}"
+  fi
+  if [[ ! -d "${outdir}" ]]; then
+    echo "MongoDB backup did not create expected directory: ${outdir}" >&2
+    exit 1
   fi
   tar -C "${workdir}" -czf "${outdir}.tar.gz" "$(basename "${outdir}")"
   rm -rf "${outdir}"

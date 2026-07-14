@@ -45,10 +45,12 @@ jobs:
           BACKUP_RETENTION_DAYS: ${{ secrets.BACKUP_RETENTION_DAYS }}
           POSTGRES_BACKUP_URL: ${{ secrets.POSTGRES_BACKUP_URL }}
           MONGO_BACKUP_URI: ${{ secrets.MONGO_BACKUP_URI }}
+          MONGO_BACKUP_DB: ${{ secrets.MONGO_BACKUP_DB }}
         run: |
           ssh fiq-deploy-target \
             "BACKUP_ROOT='${BACKUP_ROOT:-/var/backups/fiq}' \
              BACKUP_RETENTION_DAYS='${BACKUP_RETENTION_DAYS:-14}' \
              POSTGRES_BACKUP_URL='${POSTGRES_BACKUP_URL}' \
              MONGO_BACKUP_URI='${MONGO_BACKUP_URI}' \
+             MONGO_BACKUP_DB='${MONGO_BACKUP_DB}' \
              bash /tmp/fiq_backup_datastores.sh"
