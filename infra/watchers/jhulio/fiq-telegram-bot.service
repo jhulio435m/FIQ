@@ -1,0 +1,22 @@
+[Unit]
+Description=FIQ Telegram status bot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/fiq-watcher/watcher.env
+Environment=FIQ_WATCHER_CONFIG=/etc/fiq-watcher/watcher.env
+ExecStart=/usr/bin/python3 /opt/fiq-watcher/fiq_telegram_status_bot.py
+Restart=always
+RestartSec=10
+User=fiq-watcher
+Group=fiq-watcher
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/tmp /var/log/fiq-watcher /var/lib/fiq-watcher
+
+[Install]
+WantedBy=multi-user.target

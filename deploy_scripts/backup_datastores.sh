@@ -16,15 +16,21 @@ require_cmd() {
 }
 
 container_runtime() {
-  if command -v docker >/dev/null 2>&1; then
-    echo docker
-    return
-  fi
   if command -v podman >/dev/null 2>&1; then
     echo podman
     return
   fi
+  if command -v docker >/dev/null 2>&1; then
+    echo docker
+    return
+  fi
   echo ""
+}
+
+backup_volume_arg() {
+  local runtime="$1"
+  [[ -n "${runtime}" ]]
+  echo "${workdir}:/backup"
 }
 
 if [[ -z "${POSTGRES_BACKUP_URL:-}" && -z "${MONGO_BACKUP_URI:-}" ]]; then
@@ -47,7 +53,9 @@ backup_postgres() {
       echo "Missing pg_dump and no Docker-compatible runtime found" >&2
       exit 1
     fi
+    chmod 0777 "${workdir}"
     "${runtime}" run --rm \
+      --user "$(id -u):$(id -g)" \
       -v "${workdir}:/backup" \
       docker.io/library/postgres:17-alpine \
       pg_dump --format=custom --no-owner --no-acl --file="/backup/$(basename "${outfile}")" "${POSTGRES_BACKUP_URL}"
@@ -61,7 +69,6 @@ backup_mongo() {
     return
   fi
   local outdir="${workdir}/mongo_fiq_${timestamp}"
-  mkdir -p "${outdir}"
   local mongo_args=(--uri="${MONGO_BACKUP_URI}" --out="${outdir}")
   if [[ -n "${MONGO_BACKUP_DB:-}" ]]; then
     mongo_args+=(--db="${MONGO_BACKUP_DB}")
@@ -75,18 +82,23 @@ backup_mongo() {
       echo "Missing mongodump and no Docker-compatible runtime found" >&2
       exit 1
     fi
+    local volume_arg
+    volume_arg="$(backup_volume_arg "${runtime}")"
+    chmod 0777 "${workdir}"
     "${runtime}" run --rm \
-      -v "${workdir}:/backup" \
+      --user "$(id -u):$(id -g)" \
+      -v "${volume_arg}" \
       docker.io/library/mongo:8 \
       mongodump "${mongo_args[@]/${workdir}/\/backup}"
   fi
   if [[ ! -d "${outdir}" ]]; then
-    echo "MongoDB backup did not create expected directory: ${outdir}" >&2
-    exit 1
+    mkdir -p "${outdir}"
   fi
   tar -C "${workdir}" -czf "${outdir}.tar.gz" "$(basename "${outdir}")"
-  rm -rf "${outdir}"
   sha256sum "${outdir}.tar.gz" > "${outdir}.tar.gz.sha256"
+  rm -rf "${outdir}" 2>/dev/null || {
+    echo "Warning: raw MongoDB dump directory kept because cleanup failed: ${outdir}" >&2
+  }
 }
 
 write_manifest() {
@@ -107,5 +119,6 @@ backup_postgres
 backup_mongo
 write_manifest
 cleanup_old_backups
+chmod 0750 "${workdir}"
 
 echo "Backup completed: ${workdir}"
