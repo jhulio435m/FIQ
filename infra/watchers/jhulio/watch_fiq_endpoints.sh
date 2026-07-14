@@ -66,7 +66,7 @@ for target in ${targets}; do
     --silent
     --show-error
     --output /dev/null
-    --write-out "%{http_code} %{time_total}"
+    --write-out "%{http_code} %{time_total}\n"
     --connect-timeout "${timeout_seconds}"
     --max-time "${timeout_seconds}"
   )
