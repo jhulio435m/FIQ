@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     MICROSOFT_CLIENT_SECRET: str = ""
     MICROSOFT_TENANT_ID: str = "57c17caf-c500-4ffc-9976-f85fc6c66d47"
 
+    DASHBOARD_API_KEY: str = ""
+    EXTERNAL_API_EMAIL: str = ""
+    EXTERNAL_API_USER_AGENT: str = "FIQ Plataforma Digital/1.0 (biblioteca virtual academica)"
+    EXTERNAL_API_TIMEOUT_SECONDS: float = 8.0
+
     model_config = ConfigDict(env_file=".env")
 
 

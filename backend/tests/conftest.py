@@ -56,6 +56,7 @@ async def client(db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 async def seed_reference_data(db: AsyncSession) -> dict[str, uuid.UUID]:
     admin_id = uuid.uuid4()
     teacher_id = uuid.uuid4()
+    student_id = uuid.uuid4()
     db.add_all(
         [
             Rol(id=1, nombre="Admin", descripcion="Administrador"),
@@ -69,7 +70,9 @@ async def seed_reference_data(db: AsyncSession) -> dict[str, uuid.UUID]:
             EstadoRecurso(id=5, nombre="Archivado"),
             Curso(id=1, nombre="Química General", codigo="QUI101"),
             TipoActividad(id=1, nombre="login"),
+            TipoActividad(id=4, nombre="upload"),
             TipoActividad(id=8, nombre="resource_archive"),
+            TipoActividad(id=9, nombre="upload_rejected"),
             NivelDificultad(id=1, nombre="Básico"),
             ModuloLaboratorio(
                 id=1,
@@ -100,7 +103,18 @@ async def seed_reference_data(db: AsyncSession) -> dict[str, uuid.UUID]:
                 is_verified=True,
                 esta_activo=True,
             ),
+            User(
+                id=student_id,
+                email="estudiante@fiq.uncp.edu.pe",
+                hashed_password="$2b$12$M0d1hC5fMin.k3lReP0NP.CBNPEI3MqbiriI7Ti.Bw1Wpb.EwApVi",
+                nombre="Estudiante FIQ",
+                rol_id=3,
+                is_active=True,
+                is_superuser=False,
+                is_verified=True,
+                esta_activo=True,
+            ),
         ]
     )
     await db.commit()
-    return {"admin_id": admin_id, "teacher_id": teacher_id}
+    return {"admin_id": admin_id, "teacher_id": teacher_id, "student_id": student_id}

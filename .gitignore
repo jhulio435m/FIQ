@@ -18,7 +18,18 @@ frontend/dist/
 
 # Environment
 .env
+.env.*
 backend/.env
+backend/.env.*
+ha-database/.env
+ha-database/.env.*
+
+# Secrets and local network material
+privatekey
+publickey
+wg*.conf
+*.pem
+*.key
 
 # IDE
 .vscode/
@@ -36,3 +47,8 @@ backend/alembic/versions/*.pyc
 # External resources
 external_resources/
 .opencode/skills-collections/
+
+# Test/build artifacts
+frontend/test-results/
+frontend/playwright-report/
+frontend/coverage/

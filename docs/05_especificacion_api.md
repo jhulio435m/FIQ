@@ -1,202 +1,249 @@
-# 05. Especificación de la API
+# 05. Especificacion de la API
 
-## 📡 Diseño de la API (RESTful)
+Contrato REST real generado por FastAPI y verificado con `npm run openapi:check`.
 
-El backend (FastAPI) expondrá una API REST consumida por el frontend en React.
+## Autenticacion y Seguridad
 
-### 🔐 Protocolo de Autenticación
-*   **JWT (JSON Web Tokens): Tokens con identificador de usuario UUID.** Tokens de acceso con expiración corta y Refresh Tokens para persistencia de sesión segura.
+- Autenticacion principal: Bearer JWT en `Authorization: Bearer <token>`.
+- Auth cookie disponible para compatibilidad interna.
+- RBAC aplicado en backend: `Admin`, `Docente`, `Estudiante`.
+- Los endpoints administrativos responden `401` sin sesion y `403` con rol insuficiente.
+- Los errores usan el formato FastAPI `{ "detail": "mensaje" }` o lista `detail` para validacion `422`.
 
-### 🌐 Catálogo de Endpoints
+## Catalogo Real de Endpoints
 
-#### Autenticación
-*   `POST /auth/login`: Autenticación y generación de tokens.
-*   `POST /auth/logout`: Invalidación de sesión.
-*   `POST /auth/forgot-password`: Envío de enlace de recuperación.
+| Metodo | Ruta | Auth | Uso |
+| :--- | :--- | :--- | :--- |
+| `GET /health` | Publica | Healthcheck de API. |
+| `POST /auth/login` | Publica | Login propio con email/password y respuesta JWT + usuario. |
+| `POST /auth/logout` | JWT | Logout propio. |
+| `POST /auth/jwt/login` | Publica | Login del backend FastAPI Users. |
+| `POST /auth/jwt/logout` | JWT | Logout JWT FastAPI Users. |
+| `POST /auth/cookie/login` | Publica | Login por cookie. |
+| `POST /auth/cookie/logout` | Cookie | Logout cookie. |
+| `POST /auth/forgot-password` | Publica | Solicitud de recuperacion. |
+| `POST /auth/register` | Publica | Registro FastAPI Users. |
+| `GET /auth/microsoft/authorize-url` | Publica | URL de autorizacion Microsoft. |
+| `POST /auth/microsoft` | Publica | Login Microsoft con codigo OAuth. |
+| `GET /users` | JWT | Lista usuarios. |
+| `GET /users/me` | JWT | Perfil actual. |
+| `PATCH /users/me` | JWT | Actualiza perfil actual. |
+| `GET /users/{id}` | JWT | Usuario por id. |
+| `PATCH /users/{id}` | JWT | Actualiza usuario por id. |
+| `DELETE /users/{id}` | JWT | Elimina/desactiva usuario segun router FastAPI Users. |
+| `PATCH /users/{user_id}/status` | Admin | Activa o desactiva usuario. |
+| `PATCH /users/{user_id}/role` | Admin | Cambia rol del usuario. |
+| `GET /resources/types` | Publica | Tipos de recurso. |
+| `GET /resources/courses` | Publica | Cursos activos para filtros/upload. |
+| `GET /resources` | Publica | Recursos aprobados con `search`, `tipo_recurso_id`, `curso_id`, `skip`, `limit`. |
+| `POST /resources` | Docente/Admin | Upload multipart seguro de PDF. |
+| `POST /resources/init-upload` | Docente/Admin | Inicializa subida directa S3 con metadatos. |
+| `POST /resources/import-external` | Docente/Admin | Importa metadatos desde fuentes externas y crea recurso pendiente. |
+| `GET /resources/pending` | Admin | Recursos pendientes de moderacion. |
+| `PATCH /resources/{resource_id}` | Admin | Actualiza metadatos. |
+| `DELETE /resources/{resource_id}` | Admin | Archiva recurso logicamente. |
+| `PATCH /resources/{resource_id}/approve` | Admin | Aprueba recurso. |
+| `PATCH /resources/{resource_id}/observe` | Admin | Observa recurso con comentario. |
+| `POST /resources/{resource_id}/view` | Publica/JWT opcional | Incrementa visualizaciones. |
+| `POST /resources/{resource_id}/download` | JWT | Incrementa descargas y devuelve URL interna de archivo. |
+| `GET /resources/{resource_id}/url` | Publica | Devuelve URL interna del archivo. |
+| `GET /resources/{resource_id}/file` | Publica | Stream del PDF desde object storage. |
+| `GET /external/search/books` | Publica | Busca libros en Open Library e Internet Archive. |
+| `GET /external/search/articles` | Publica | Busca articulos en Crossref, OpenAlex y Unpaywall si hay email configurado. |
+| `GET /labs` | Publica | Modulos de laboratorio, filtro `nivel_id`. |
+| `GET /labs/{module_id}` | Publica/JWT opcional | Detalle de modulo y registra `lab_access` si hay usuario. |
+| `GET /activity` | Admin | Logs de auditoria con filtros `skip`, `limit`, `usuario_id`, fechas. |
+| `GET /reports/most-viewed` | Admin | Recursos mas consultados. |
+| `GET /reports/labs-usage` | Admin | Uso agregado de laboratorios. |
+| `GET /reports/public/dashboard-data` | API key | Dataset publico controlado para dashboard externo. |
+| `GET /reports/public/resources` | API key | Recursos para dashboard externo. |
+| `GET /reports/public/courses` | API key | Cursos para dashboard externo. |
+| `GET /reports/public/users` | API key | Usuarios para dashboard externo. |
+| `GET /reports/public/activities` | API key | Actividades para dashboard externo. |
 
-#### Gestión de Usuarios (Admin)
-*   `GET /users`: Listado paginado con filtros.
-*   `POST /users`: Registro administrativo de nuevos usuarios.
-*   `PATCH /users/{id}/status`: Activar o desactivar usuarios.
-*   `PATCH /users/{id}/role`: Cambio de rol/permisos.
+## Payloads Principales
 
-#### Biblioteca y Recursos
-*   `GET /resources/types`: Lista de tipos de recurso (Libro, Apunte, Tesis...).
-*   `GET /resources`: Buscador público de recursos aprobados (query: `search`, `tipo_recurso_id`, `skip`, `limit`).
-*   `POST /resources`: Subida de recurso por docente (Estado: Pendiente) con soporte para metadatos Mendeley.
-*   `PATCH /resources/{id}`: Actualización de metadatos académicos del recurso (Admin).
-*   `GET /resources/pending`: Listado para revisión administrativa.
-*   `PATCH /resources/{id}/approve`: Aprobación y publicación oficial.
-*   `PATCH /resources/{id}/observe`: Devolución con comentarios técnicos.
-*   `POST /resources/{id}/view`: Incrementa contador de visualizaciones.
-*   `POST /resources/{id}/download`: Incrementa contador de descargas.
-*   `DELETE /resources/{id}`: Archivado lógico del recurso.
+### `POST /auth/login`
 
-#### Laboratorios
-*   `GET /labs`: Listado de módulos por nivel de dificultad.
-*   `GET /labs/{id}`: Acceso y metadatos de la simulación.
+Request:
 
-#### Auditoría y Reportes
-*   `GET /activity`: Consulta de logs globales (Solo Admin).
-*   `GET /reports/most-viewed`: Analítica de los recursos más consultados.
-*   `GET /reports/labs-usage`: Analítica de uso de simuladores.
+```json
+{
+  "email": "admin@fiq.uncp.edu.pe",
+  "password": "password123"
+}
+```
 
----
+Response `200`:
 
-## 📝 Estructura de Payloads (Ejemplos)
+```json
+{
+  "access_token": "jwt",
+  "refresh_token": "jwt",
+  "token_type": "bearer",
+  "usuario": {
+    "id": "uuid",
+    "nombre": "Admin FIQ",
+    "email": "admin@fiq.uncp.edu.pe",
+    "rol": "Admin"
+  }
+}
+```
 
-### 1. Inicio de Sesión (`POST /auth/login`)
-*   **Request Body:**
-    ```json
+Errores esperados: `401` credenciales invalidas, `422` payload invalido.
+
+### `GET /resources`
+
+Query params:
+
+| Parametro | Tipo | Descripcion |
+| :--- | :--- | :--- |
+| `search` | string | Busca en titulo/resumen. |
+| `tipo_recurso_id` | int | Filtra por tipo. |
+| `curso_id` | int | Filtra por curso. |
+| `skip` | int | Offset, default `0`. |
+| `limit` | int | Limite, default `20`. |
+
+Response `200`: lista de `RecursoRead` con metadatos bibliograficos, curso/tipo calculados, contadores y fechas.
+
+### `POST /resources`
+
+Request `multipart/form-data`:
+
+| Campo | Tipo | Regla |
+| :--- | :--- | :--- |
+| `file` | PDF | Obligatorio, `application/pdf` o `application/x-pdf`, extension unica `.pdf`, magic number `%PDF`, marcador `%%EOF`, max `MAX_UPLOAD_SIZE`. |
+| `titulo` | string | Obligatorio. |
+| `resumen` | string | Opcional. |
+| `tipo_recurso_id` | int | Obligatorio. |
+| `curso_id` | int | Opcional. |
+| `autores` | string | Opcional. |
+| `editorial` | string | Opcional. |
+| `doi` | string | Opcional. |
+| `anio` | int | Opcional. |
+
+Response `201`: recurso creado en estado `Pendiente`.
+
+Errores esperados:
+
+| Codigo | Caso |
+| :--- | :--- |
+| `401` | Sin token. |
+| `403` | Rol sin permiso. |
+| `413` | Archivo excede limite. |
+| `415` | MIME, extension o magic number no permitido. |
+| `422` | Archivo vacio, PDF incompleto, nombre peligroso o formulario invalido. |
+| `500` | Object storage no disponible. |
+
+La API genera la clave de almacenamiento en servidor y registra `upload` o `upload_rejected` cuando existe el tipo de actividad.
+
+### `POST /resources/init-upload`
+
+Request JSON: metadatos de recurso mas `file_name`, `file_mime`, `file_size`.
+
+Validaciones: tamano positivo, maximo configurado, MIME PDF y extension `.pdf`. No valida magic number porque el binario se sube directo a S3.
+
+### `GET /external/search/books`
+
+Query params:
+
+| Parametro | Tipo | Descripcion |
+| :--- | :--- | :--- |
+| `q` | string | Texto de busqueda, minimo 2 caracteres. |
+| `isbn` | string | ISBN opcional para busqueda dirigida en Open Library. |
+| `limit` | int | Resultados por proveedor, `1..20`, default `8`. |
+
+Response `200`:
+
+```json
+{
+  "results": [
     {
-      "email": "usuario@uncp.edu.pe",
-      "password": "PasswordSeguro123!"
+      "source": "open_library",
+      "external_id": "OL123W",
+      "resource_type": "book",
+      "title": "Termodinamica aplicada",
+      "authors": ["Autor"],
+      "publisher": "Editorial",
+      "published_year": 2025,
+      "isbn": "9781234567890",
+      "cover_url": "https://covers.openlibrary.org/b/isbn/9781234567890-M.jpg",
+      "external_url": "https://openlibrary.org/works/OL123W"
     }
-    ```
-*   **Response Body (200 OK):**
-    ```json
-    {
-      "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      "token_type": "bearer",
-      "usuario": {
-        "id": "8b0fba33-3f62-4e87-b0d6-1d7f880bc197",
-        "nombre": "Jhulio Moran",
-        "email": "usuario@uncp.edu.pe",
-        "rol": "Docente"
-      }
-    }
-    ```
+  ],
+  "warnings": []
+}
+```
 
-### 2. Listado de Recursos (`GET /resources`)
-*   **Query Params:**
-    *   `search` (opcional): Búsqueda por título o resumen.
-    *   `tipo_recurso_id` (opcional): Filtro por tipo de recurso.
-    *   `skip` (default: 0): Paginación.
-    *   `limit` (default: 20): Tamaño de página.
-*   **Response Body (200 OK):**
-    ```json
-    [
-      {
-        "id": 1,
-        "titulo": "Balance de Materia y Energía",
-        "resumen": "Guía completa de balances en procesos químicos...",
-        "url_archivo": "https://ejemplo.com/balance.pdf",
-        "archivo_size": 2500000,
-        "archivo_mime": "application/pdf",
-        "tipo_recurso_id": 1,
-        "estado_id": 2,
-        "subido_por": 1,
-        "visualizaciones": 146,
-        "descargas": 90,
-        "created_at": "2026-05-15T10:30:00Z",
-        "tipo_recurso_nombre": "Libro",
-        "curso_nombre": "Química General",
-        "autores": "Moran J., Pérez L.",
-        "editorial": "FIQ-UNCP",
-        "doi": "10.1016/j.env.2026",
-        "anio": 2026
-      }
-    ]
-    ```
+Fuentes: Open Library Search/Covers e Internet Archive Advanced Search. Si un proveedor falla, la respuesta conserva resultados de otros proveedores y agrega un warning sin exponer trazas internas.
 
-### 3. Tipos de Recurso (`GET /resources/types`)
-*   **Response Body (200 OK):**
-    ```json
-    [
-      { "id": 1, "nombre": "Libro" },
-      { "id": 2, "nombre": "Apunte" },
-      { "id": 3, "nombre": "Guía de laboratorio" },
-      { "id": 4, "nombre": "Tesis" }
-    ]
-    ```
+### `GET /external/search/articles`
 
-### 4. Carga de Recurso (`POST /resources`)
-*   **Request Body (Multipart/Form-Data):**
-    *   `file`: (Archivo binario PDF, max 20MB)
-    *   `titulo`: "Guía de Laboratorio de Operaciones Unitarias I"
-    *   `resumen`: "Introducción práctica a los balances de materia y energía en columnas de destilación."
-    *   `tipo_recurso_id`: 2 (Apunte)
-    *   `curso_id`: 5 (Operaciones Unitarias I)
-    *   `autores`: "Moran J., Pérez L." (Opcional, estilo Mendeley)
-    *   `editorial`: "FIQ-UNCP" (Opcional, estilo Mendeley)
-    *   `doi`: "10.1016/j.env.2026" (Opcional, estilo Mendeley)
-    *   `anio`: 2026 (Opcional, estilo Mendeley)
-*   **Response Body (201 Created):**
-    ```json
-    {
-      "id": 1,
-      "titulo": "Guía de Laboratorio de Operaciones Unitarias I",
-      "url_archivo": "https://s3.amazonaws.com/fiq-bucket/resources/file.pdf",
-      "archivo_size": 4120340,
-      "archivo_mime": "application/pdf",
-      "tipo_recurso_id": 2,
-      "estado_id": 1,
-      "subido_por": 1,
-      "visualizaciones": 0,
-      "descargas": 0,
-      "created_at": "2026-06-04T16:17:40Z",
-      "tipo_recurso_nombre": "Apunte",
-      "curso_nombre": null,
-      "autores": "Moran J., Pérez L.",
-      "editorial": "FIQ-UNCP",
-      "doi": "10.1016/j.env.2026",
-      "anio": 2026
-    }
-    ```
+Query params:
 
-### 5. Tracking de Visualizaciones (`POST /resources/{id}/view`)
-*   **Response Body (200 OK):** Objeto `Recurso` completo con contadores actualizados.
+| Parametro | Tipo | Descripcion |
+| :--- | :--- | :--- |
+| `q` | string | Titulo, autor o palabras clave. |
+| `doi` | string | DOI para busqueda exacta. |
+| `limit` | int | Resultados por proveedor, `1..20`, default `8`. |
 
-### 6. Tracking de Descargas (`POST /resources/{id}/download`)
-*   **Response Body (200 OK):** Objeto `Recurso` completo con contadores actualizados.
+Fuentes: Crossref, OpenAlex y Unpaywall. Unpaywall requiere `EXTERNAL_API_EMAIL`; si no existe, devuelve warning y no bloquea Crossref/OpenAlex.
 
-### 7. Edición de Metadatos del Recurso (`PATCH /resources/{id}`)
-*   **Request Body (JSON):**
-    ```json
-    {
-      "titulo": "Guía de Laboratorio de Operaciones Unitarias I (Actualizado)",
-      "resumen": "Resumen actualizado de balances.",
-      "tipo_recurso_id": 3,
-      "curso_id": 5,
-      "autores": "Moran J., Pérez L., Silva A.",
-      "editorial": "Elsevier",
-      "doi": "10.1016/j.env.2026",
-      "anio": 2026
-    }
-    ```
-*   **Response Body (200 OK):** Objeto `Recurso` completo con los metadatos actualizados.
+### `POST /resources/import-external`
 
-### 8. Archivado Lógico del Recurso (`DELETE /resources/{id}`)
-*   **Request Body (JSON, opcional):**
-    ```json
-    {
-      "comentario": "Recurso retirado por version obsoleta."
-    }
-    ```
-*   **Response Body (200 OK):** Objeto `Recurso` completo con `estado_id` correspondiente a `Archivado`. El recurso archivado deja de aparecer en `GET /resources`.
+Request JSON:
 
----
+| Campo | Tipo | Regla |
+| :--- | :--- | :--- |
+| `source` | string | Fuente externa, por ejemplo `crossref` u `open_library`. |
+| `external_id` | string | Identificador original. |
+| `titulo` | string | Titulo a registrar. |
+| `tipo_recurso_id` | int | Tipo local asignado. |
+| `resumen` | string | Opcional. |
+| `curso_id` | int | Opcional. |
+| `autores` | string | Opcional. |
+| `editorial` | string | Opcional. |
+| `doi` | string | Opcional; si ya existe responde `409`. |
+| `anio` | int | Opcional. |
+| `external_url` | string | URL legal de referencia. |
+| `open_access_url` | string | URL open access legal si existe. |
+| `cover_url` | string | URL de portada si existe. |
 
-## 🚫 Estructura Estándar de Errores
+Response `201`: crea un recurso en estado `Pendiente`, con `archivo_mime="text/html"` y `url_archivo` apuntando a `open_access_url` o `external_url`. No descarga ni almacena archivos externos automaticamente.
 
-Todas las respuestas de error siguen el estándar de FastAPI con una lista detallada de errores:
+Errores esperados: `401`, `403`, `409`, `422`.
 
-*   **Error de Validación (422 Unprocessable Entity):**
-    ```json
-    {
-      "detail": [
-        {
-          "loc": ["body", "email"],
-          "msg": "value is not a valid email address",
-          "type": "value_error.email"
-        }
-      ]
-    }
-    ```
-*   **Error Genérico del Sistema (400/401/403/404):**
-    ```json
-    {
-      "detail": "El recurso solicitado no existe o no tiene permisos de acceso."
-    }
-    ```
+### Moderacion de Recursos
+
+- `PATCH /resources/{resource_id}/approve`: body opcional `{ "comentario": "texto" }`.
+- `PATCH /resources/{resource_id}/observe`: body requerido `{ "comentario": "texto" }`.
+- `DELETE /resources/{resource_id}`: body opcional `{ "comentario": "texto" }`.
+
+Codigos comunes: `200`, `401`, `403`, `404`, `422`.
+
+## Auditoria
+
+Eventos esperados:
+
+| Evento | Origen |
+| :--- | :--- |
+| `login` | Login exitoso. |
+| `upload` | Upload aceptado o metadatos de direct upload creados. |
+| `upload_rejected` | Upload rechazado por validacion backend. |
+| `view` | Vista de recurso con usuario autenticado. |
+| `download` | Descarga solicitada. |
+| `lab_access` | Acceso autenticado a modulo de laboratorio. |
+| `resource_approve` | Aprobacion administrativa. |
+| `resource_archive` | Archivado administrativo. |
+
+Campos registrados: usuario, tipo, fecha/hora, IP, user agent y detalle JSON con recurso, resultado o motivo.
+
+## Verificacion
+
+Ejecutar:
+
+```bash
+npm run openapi:check
+```
+
+El script importa la app FastAPI, normaliza rutas con parametros y falla si un endpoint real no esta documentado o si el documento conserva rutas inexistentes.

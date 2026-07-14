@@ -5,6 +5,7 @@ import { ResourceFilters } from "@/components/library/resource-filters"
 import { ResourceGrid } from "@/components/library/resource-grid"
 import { ResourceDetail } from "@/components/library/resource-detail"
 import { UploadDialog } from "@/components/library/upload-dialog"
+import { ExternalCatalogPanel } from "@/components/library/external-catalog-panel"
 import { getResources } from "@/services/resources"
 import api from "@/services/api"
 import { useDebounce } from "@/hooks/use-debounce"
@@ -150,6 +151,7 @@ export default function Biblioteca() {
               isLoading={isLoading}
               onSelect={handleSelect}
             />
+            <ExternalCatalogPanel query={debouncedSearch} tipos={tipos} canImport={canUpload} />
           </div>
         </div>
       </div>

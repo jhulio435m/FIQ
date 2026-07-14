@@ -17,6 +17,10 @@ from app.core.security import hash_password
 
 async def seed():
     async with engine.begin() as conn:
+        # Ensure tables exist
+        print("Ensuring tables exist...")
+        await conn.run_sync(SQLModel.metadata.create_all)
+
         print("Cleaning database (TRUNCATE)...")
         # Truncate all tables to start fresh
         tables = [
@@ -30,9 +34,6 @@ async def seed():
                 await conn.execute(text(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE"))
             except Exception as e:
                 print(f"Skipping truncate for {table}: {e}")
-        
-        # Ensure tables exist
-        await conn.run_sync(SQLModel.metadata.create_all)
 
     async with async_session_maker() as db:
         print("Seeding roles...")
@@ -93,6 +94,7 @@ async def seed():
             TipoActividad(id=6, nombre="lab_access"),
             TipoActividad(id=7, nombre="resource_approve"),
             TipoActividad(id=8, nombre="resource_archive"),
+            TipoActividad(id=9, nombre="upload_rejected"),
         ]
         db.add_all(actividades)
 

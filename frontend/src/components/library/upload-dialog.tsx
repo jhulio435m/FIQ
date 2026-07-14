@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
+import type { FieldErrors, Resolver } from "react-hook-form"
 import * as z from "zod"
 import {
   Dialog,
@@ -42,6 +42,25 @@ const uploadSchema = z.object({
 
 type UploadFormValues = z.infer<typeof uploadSchema>
 
+const uploadResolver: Resolver<UploadFormValues> = async (values) => {
+  const result = uploadSchema.safeParse(values)
+  if (result.success) {
+    return { values: result.data, errors: {} }
+  }
+
+  const errors: FieldErrors<UploadFormValues> = {}
+  for (const issue of result.error.issues) {
+    const field = issue.path[0]
+    if (typeof field === "string" && field in values) {
+      errors[field as keyof UploadFormValues] = {
+        type: issue.code,
+        message: issue.message,
+      }
+    }
+  }
+  return { values: {}, errors }
+}
+
 export function UploadDialog() {
   const [open, setOpen] = useState(false)
   const [file, setFile] = useState<File | null>(null)
@@ -65,7 +84,7 @@ export function UploadDialog() {
   })
 
   const form = useForm<UploadFormValues>({
-    resolver: zodResolver(uploadSchema),
+    resolver: uploadResolver,
     defaultValues: {
       titulo: "",
       resumen: "",

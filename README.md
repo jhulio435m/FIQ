@@ -1,64 +1,146 @@
-# FIQ Plataforma Digital - UNCP (V1.0 Release Candidate)
+# FIQ Plataforma Digital - UNCP
 
-Plataforma integral para la Facultad de Ingeniería Química - UNCP. Gestión de recursos académicos, laboratorios virtuales y auditoría avanzada.
+Biblioteca virtual y plataforma academica para la Facultad de Ingenieria Quimica UNCP. Incluye autenticacion con roles, catalogo de recursos, uploads PDF seguros, moderacion administrativa, auditoria, reportes y laboratorios educativos interactivos.
 
-## 🚀 Estado del Proyecto
-El sistema cuenta con un **MVP funcional verificable** para biblioteca, autenticación, laboratorios, administración y auditoría. La ruta a release productivo queda documentada en [`docs/08_estado_brechas.md`](./docs/08_estado_brechas.md).
+## Stack
 
-### Funcionalidades Core Implementadas:
-- **Autenticación & RBAC:** Login con JWT, roles de Admin, Docente y Estudiante.
-- **Gestión de Perfil:** Los usuarios pueden actualizar sus datos y contraseñas.
-- **Biblioteca Virtual:** Buscador avanzado con filtros por tipo y curso.
-- **Carga de Archivos Real:** Sistema de subida de PDFs directo a MinIO/S3 con validación.
-- **Descargas Seguras:** Entrega de binarios mediante streams protegidos por JWT.
-- **Panel Administrativo:** Control total de usuarios, roles y aprobación de recursos.
-- **Auditoría:** Registro automático de actividades críticas (logs).
+- Backend: FastAPI, SQLModel/SQLAlchemy, PostgreSQL, Redis, MinIO/S3, Alembic, UV.
+- Frontend: React 19, TypeScript 6, Vite 8, Tailwind v4, shadcn/ui, TanStack Query, Zustand.
+- Testing: Pytest, Vitest + React Testing Library + MSW, Playwright.
+- Infra local: Docker Compose.
 
-## 🏗️ Arquitectura Técnica
-- **Backend:** FastAPI (Python 3.12), SQLAlchemy 2.0, PostgreSQL 17, Redis 7.
-- **Almacenamiento:** MinIO (S3 compatible) para binarios reales.
-- **Frontend:** React 19, Vite 6, Tailwind CSS v4, shadcn/ui.
-- **Infraestructura:** Docker Compose para orquestación local y soporte para K8s.
+## Requisitos
 
-## 🛠️ Guía de Inicio Rápido (Modo Híbrido/Dev)
-
-### 1. Requisitos
-- Docker y Docker Compose.
 - Python 3.12+
+- UV
 - Node.js 22+
+- Docker y Docker Compose
 
-### 2. Levantar Infraestructura
+## Variables de entorno
+
+Usar `backend/.env.example` como base. No subir `.env`, `.env.prod`, llaves privadas, WireGuard ni claves S3 reales. El repo ignora esos archivos por defecto.
+
+Variables principales:
+
+- `DATABASE_URL`
+- `REDIS_URL`
+- `SECRET_KEY`
+- `S3_ENDPOINT`
+- `S3_ACCESS_KEY`
+- `S3_SECRET_KEY`
+- `S3_BUCKET_NAME`
+- `CORS_ORIGINS`
+- `MAX_UPLOAD_SIZE`
+- `DASHBOARD_API_KEY` para endpoints `/reports/public/*`
+- `EXTERNAL_API_EMAIL` para uso identificado de OpenAlex/Crossref y habilitar Unpaywall.
+- `EXTERNAL_API_USER_AGENT` para identificar la plataforma ante APIs bibliograficas abiertas.
+
+## Desarrollo local
+
+Infraestructura:
+
 ```bash
-docker-compose up -d postgres redis minio
+docker compose up -d postgres redis minio
 ```
 
-### 3. Configurar y Ejecutar Backend
+Backend:
+
 ```bash
 cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python3 -m app.core.seed # Carga datos y archivos REALES
-uvicorn app.main:app --reload
+uv run alembic upgrade head
+uv run python -m app.core.seed
+uv run uvicorn app.main:app --reload
 ```
 
-### 4. Ejecutar Frontend
+Frontend:
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-## 🔐 Credenciales por Defecto (Seed)
-- **Admin:** `admin@fiq.uncp.edu.pe` / `admin123`
+## Testing y calidad
 
-## 📖 Documentación Detallada
-Consultar la carpeta [`docs/`](./docs/) para especificaciones profundas:
-- [Contexto del Proyecto](./docs/01_contexto_proyecto.md)
-- [Gestión Ágil](./docs/02_gestion_agil.md)
-- [Arquitectura de Software](./docs/03_arquitectura_software.md)
-- [Modelo de Datos](./docs/04_modelo_datos.md)
-- [Especificación API](./docs/05_especificacion_api.md)
-- [Seguridad Zero Trust](./docs/06_seguridad_zero_trust.md)
-- [Infraestructura y DevOps](./docs/07_infraestructura_devops.md)
-- [Estado, Brechas y Continuidad](./docs/08_estado_brechas.md)
+Backend:
+
+```bash
+cd backend
+UV_CACHE_DIR=/tmp/fiq-uv-cache uv run --extra dev pytest
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm run lint
+npm run build
+npm run test:unit
+npx playwright test
+```
+
+OpenAPI:
+
+```bash
+npm run openapi:check
+```
+
+Docker:
+
+```bash
+docker compose up -d --build
+docker compose ps
+docker compose logs --tail=100
+docker compose down
+```
+
+## Roles de prueba
+
+Seed principal:
+
+- Admin: `admin@fiq.uncp.edu.pe` / `admin123`
+
+Permisos resumidos:
+
+- Admin: usuarios, moderacion, reportes, auditoria, recursos.
+- Docente: subir recursos y consultar biblioteca/laboratorios.
+- Estudiante: consultar biblioteca/laboratorios y descargar con sesion.
+
+## Flujo de uploads
+
+`POST /resources` recibe `multipart/form-data`, exige PDF real y crea el recurso en estado `Pendiente`. Validaciones backend:
+
+- MIME permitido: `application/pdf` o `application/x-pdf`.
+- Extension unica `.pdf`.
+- Nombre sin traversal.
+- Magic number `%PDF`.
+- Marcador final `%%EOF`.
+- Tamano maximo `MAX_UPLOAD_SIZE`.
+- Clave de almacenamiento generada por servidor.
+- Auditoria `upload` o `upload_rejected`.
+
+## Integraciones bibliograficas externas
+
+El backend expone endpoints propios y no llama APIs externas desde React:
+
+- `GET /external/search/books`: Open Library + Internet Archive.
+- `GET /external/search/articles`: Crossref + OpenAlex + Unpaywall.
+- `POST /resources/import-external`: convierte un resultado externo en recurso interno pendiente.
+
+Los resultados externos se normalizan a metadatos comunes: titulo, autores, editorial/revista, anio, ISBN/DOI, portada, URL externa y URL open access cuando aplica. Unpaywall requiere `EXTERNAL_API_EMAIL`; si falta, la API devuelve un warning y conserva los resultados de Crossref/OpenAlex.
+
+## Troubleshooting
+
+- Si `pytest` global no existe, usar `uv run --extra dev pytest`.
+- Si UV no puede escribir cache fuera del sandbox, usar `UV_CACHE_DIR=/tmp/fiq-uv-cache`.
+- En Arch, `npx playwright install --with-deps` intenta usar `apt-get`; usar `npx playwright install` y resolver dependencias del sistema con el gestor de paquetes local.
+- Si Docker Compose queda esperando frontend, revisar primero `backend` healthcheck y logs de Postgres/MinIO.
+
+## Documentacion
+
+- [API](./docs/05_especificacion_api.md)
+- [Seguridad de uploads](./docs/09_seguridad_uploads.md)
+- [Roles y permisos](./docs/10_roles_permisos.md)
+- [Pruebas](./docs/11_pruebas.md)
+- [Laboratorios](./docs/12_laboratorios.md)
+- [Integraciones externas](./docs/13_integraciones_externas.md)
