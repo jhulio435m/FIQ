@@ -38,6 +38,7 @@ CHATS_FILE = Path(ENV.get("TELEGRAM_CHATS_FILE", str(STATE_DIR / "telegram_chats
 OFFSET_FILE = Path(ENV.get("TELEGRAM_OFFSET_FILE", str(STATE_DIR / "telegram_offset")))
 METRICS_FILE = Path(ENV.get("FIQ_WATCHER_METRICS_FILE", "/tmp/fiq-watcher.prom"))
 LOG_FILE = Path(ENV.get("FIQ_WATCHER_LOG_FILE", "/tmp/fiq-watcher.log"))
+HA_STATUS_FILE = Path(ENV.get("FIQ_HA_STATUS_FILE", str(STATE_DIR / "ha_status.json")))
 ALLOWED_CHAT_IDS = {
     chat_id.strip()
     for chat_id in ENV.get("TELEGRAM_ALLOWED_CHAT_IDS", ENV.get("TELEGRAM_CHAT_ID", "")).split()
@@ -113,9 +114,30 @@ def systemctl_state(unit: str) -> str:
     return result.stdout.strip() or "unknown"
 
 
-def metric_lines() -> list[str]:
+def service_label(name: str) -> str:
+    labels = {
+        "frontend": "Frontend publico",
+        "grafana": "Grafana",
+        "azure_ssh": "Azure SSH",
+        "api_health": "API backend",
+        "powerbi_dashboard": "API Power BI",
+    }
+    return labels.get(name, name.replace("_", " ").strip().title())
+
+
+def format_latency(value: str) -> str:
+    try:
+        seconds = float(value)
+    except ValueError:
+        return value
+    if seconds < 1:
+        return f"{round(seconds * 1000)} ms"
+    return f"{seconds:.1f} s"
+
+
+def read_metrics() -> dict[str, dict[str, str]]:
     if not METRICS_FILE.exists():
-        return ["metrics: not available"]
+        return {}
 
     status: dict[str, dict[str, str]] = {}
     for line in METRICS_FILE.read_text(encoding="utf-8").splitlines():
@@ -126,39 +148,95 @@ def metric_lines() -> list[str]:
         metric = prefix.split("{", 1)[0].replace("fiq_watcher_", "")
         status.setdefault(target, {})[metric] = value
 
-    if not status:
-        return ["metrics: empty"]
+    return status
 
+
+def metric_lines(status: dict[str, dict[str, str]]) -> list[str]:
+    if not status:
+        return ["- Sin metricas disponibles"]
     lines: list[str] = []
     for target in sorted(status):
         data = status[target]
         up = data.get("up", "0")
-        state = "UP" if up == "1" else "DOWN"
-        detail = data.get("http_status") or data.get("tcp_status") or "n/a"
-        latency = data.get("latency_seconds", "n/a")
-        lines.append(f"{target}: {state} status={detail} latency={latency}s")
+        state = "OK" if up == "1" else "DOWN"
+        latency = format_latency(data.get("latency_seconds", "n/a"))
+        if "http_status" in data:
+            detail = f"HTTP {data['http_status']}"
+        elif "tcp_status" in data:
+            detail = "TCP conectado" if data["tcp_status"] == "1" else "TCP sin conexion"
+        else:
+            detail = "sin detalle"
+        lines.append(f"- {service_label(target)}: {state} ({detail}, {latency})")
     return lines
 
 
-def last_log_lines() -> list[str]:
-    if not LOG_FILE.exists():
-        return []
-    lines = [line for line in LOG_FILE.read_text(encoding="utf-8", errors="replace").splitlines() if line]
-    return lines[-3:]
+def health_summary(status: dict[str, dict[str, str]]) -> str:
+    if not status:
+        return "SIN METRICAS"
+    failed = [target for target, data in status.items() if data.get("up") != "1"]
+    if failed:
+        return "ALERTA: " + ", ".join(service_label(target) for target in sorted(failed))
+    return "OK"
+
+
+def ha_status() -> dict[str, str]:
+    defaults = {
+        "app": ENV.get(
+            "FIQ_HA_APP_STATUS",
+            "OK - 3 replicas distribuidas en oti, ubuntu y laptop",
+        ),
+        "control_plane": ENV.get(
+            "FIQ_HA_CONTROL_PLANE_STATUS",
+            "NO REQUERIDO - oti como control-plane es suficiente para este laboratorio",
+        ),
+        "postgres": ENV.get(
+            "FIQ_HA_POSTGRES_STATUS",
+            "PENDIENTE CRITICO - falta Patroni/etcd/HAProxy o PostgreSQL gestionado",
+        ),
+    }
+    if not HA_STATUS_FILE.exists():
+        return defaults
+    try:
+        file_status = json.loads(HA_STATUS_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return defaults
+    for key in defaults:
+        value = file_status.get(key)
+        if isinstance(value, str) and value.strip():
+            defaults[key] = value.strip()
+    return defaults
+
+
+def service_state_line(label: str, unit: str, inactive_is_ok: bool = False) -> str:
+    state = systemctl_state(unit)
+    if state == "active" or (inactive_is_ok and state == "inactive"):
+        rendered = "OK"
+    else:
+        rendered = f"ALERTA ({state})"
+    return f"- {label}: {rendered}"
 
 
 def status_text() -> str:
+    metrics = read_metrics()
+    ha = ha_status()
     lines = [
-        "FIQ status",
-        f"watcher.timer={systemctl_state('fiq-watcher.timer')}",
-        f"watcher.service={systemctl_state('fiq-watcher.service')}",
+        "FIQ - Estado general",
+        f"Resumen: {health_summary(metrics)}",
+        f"Revision: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}",
         "",
-        "Targets:",
-        *metric_lines(),
+        "Servicios:",
+        service_state_line("Watcher programado", "fiq-watcher.timer"),
+        service_state_line("Ultimo chequeo", "fiq-watcher.service", inactive_is_ok=True),
+        service_state_line("Bot Telegram", "fiq-telegram-bot.service"),
+        "",
+        "Objetivos monitoreados:",
+        *metric_lines(metrics),
+        "",
+        "Alta disponibilidad:",
+        f"- App/frontend: {ha['app']}",
+        f"- Control-plane: {ha['control_plane']}",
+        f"- PostgreSQL HA: {ha['postgres']}",
     ]
-    logs = last_log_lines()
-    if logs:
-        lines.extend(["", "Recent logs:", *logs])
     return "\n".join(lines)[:3900]
 
 
