@@ -1,0 +1,58 @@
+name: Deploy Kubernetes
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 30
+    env:
+      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Connect to Tailnet
+        if: env.TAILSCALE_AUTHKEY != ''
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.K8S_SSH_HOST }}
+          DEPLOY_USER: ${{ secrets.K8S_SSH_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.K8S_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.K8S_KNOWN_HOSTS }}
+        run: ./deploy_scripts/github_actions_ssh_setup.sh
+
+      - name: Sync Kubernetes manifests
+        run: |
+          ssh fiq-deploy-target "mkdir -p ~/FIQ/infra"
+          scp -r infra/k8s fiq-deploy-target:~/FIQ/infra/
+
+      - name: Apply Kubernetes manifests
+        run: |
+          ssh fiq-deploy-target "cd ~/FIQ && kubectl apply -k infra/k8s/overlays/${{ inputs.environment }}"

@@ -1,0 +1,54 @@
+name: Production Backups
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 7 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-backups
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Connect to Tailnet
+        if: env.TAILSCALE_AUTHKEY != ''
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.BACKUP_SSH_HOST }}
+          DEPLOY_USER: ${{ secrets.BACKUP_SSH_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.BACKUP_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.BACKUP_KNOWN_HOSTS }}
+        run: ./deploy_scripts/github_actions_ssh_setup.sh
+
+      - name: Upload backup script
+        run: |
+          scp deploy_scripts/backup_datastores.sh fiq-deploy-target:/tmp/fiq_backup_datastores.sh
+
+      - name: Run remote backup
+        env:
+          BACKUP_ROOT: ${{ secrets.BACKUP_ROOT }}
+          BACKUP_RETENTION_DAYS: ${{ secrets.BACKUP_RETENTION_DAYS }}
+          POSTGRES_BACKUP_URL: ${{ secrets.POSTGRES_BACKUP_URL }}
+          MONGO_BACKUP_URI: ${{ secrets.MONGO_BACKUP_URI }}
+        run: |
+          ssh fiq-deploy-target \
+            "BACKUP_ROOT='${BACKUP_ROOT:-/var/backups/fiq}' \
+             BACKUP_RETENTION_DAYS='${BACKUP_RETENTION_DAYS:-14}' \
+             POSTGRES_BACKUP_URL='${POSTGRES_BACKUP_URL}' \
+             MONGO_BACKUP_URI='${MONGO_BACKUP_URI}' \
+             bash /tmp/fiq_backup_datastores.sh"
