@@ -1,12 +1,11 @@
-scope: fiq_cluster
-namespace: /db/
+scope: fiq-postgres
+namespace: /service/
 
 restapi:
   listen: 0.0.0.0:8008
-  connect_address: ${PATRONI_RESTAPI_CONNECT_ADDRESS}
 
 etcd3:
-  hosts: ${PATRONI_ETCD3_HOSTS}
+  hosts: 127.0.0.1:2379
 
 bootstrap:
   dcs:
@@ -15,45 +14,50 @@ bootstrap:
     retry_timeout: 10
     maximum_lag_on_failover: 1048576
     postgresql:
-      use_pg_rewind: false
+      use_pg_rewind: true
       use_slots: true
       parameters:
         wal_level: replica
         hot_standby: "on"
-        wal_keep_size: 128MB
+        wal_keep_size: 512MB
         max_wal_senders: 10
         max_replication_slots: 10
-        checkpoint_timeout: 30s
+        checkpoint_timeout: 60s
+        max_connections: 200
   initdb:
     - encoding: UTF8
     - data-checksums
   pg_hba:
     - host replication replicator 127.0.0.1/32 md5
     - host replication replicator all md5
+    - host all postgres all md5
     - host all all all md5
 
   users:
-    postgres:
-      password: ${PATRONI_SUPERUSER_PASSWORD}
-      options:
-        - superuser
     replicator:
-      password: ${PATRONI_REPLICATION_PASSWORD}
       options:
         - replication
+    rewind_user:
+      options:
+        - superuser
 
 postgresql:
   listen: 0.0.0.0:5432
-  connect_address: ${PATRONI_POSTGRESQL_CONNECT_ADDRESS}
   data_dir: /home/postgres/pgdata/data
-  bin_dir: /usr/lib/postgresql/15/bin
+  bin_dir: /usr/lib/postgresql/17/bin
   pgpass: /tmp/pgpass
   authentication:
     superuser:
       username: postgres
-      password: ${PATRONI_SUPERUSER_PASSWORD}
     replication:
       username: replicator
-      password: ${PATRONI_REPLICATION_PASSWORD}
+    rewind:
+      username: rewind_user
   parameters:
     unix_socket_directories: '.'
+    shared_buffers: 256MB
+    effective_cache_size: 768MB
+    maintenance_work_mem: 64MB
+    log_min_duration_statement: 1000
+    log_connections: "on"
+    log_disconnections: "on"

@@ -59,7 +59,7 @@ flowchart TD
 ### Fase 0: Base ya disponible
 
 - `compose.yaml` local con PostgreSQL, MongoDB, Redis, MinIO, backend y frontend.
-- PostgreSQL HA iniciado con Patroni/etcd/HAProxy en `ha-database/`.
+- PostgreSQL HA preparado con Patroni/etcd/HAProxy en `ha-database/`; queda listo para ejecutar despliegue, migracion de datos y prueba de failover.
 - MongoDB documental para `activity_events` y `external_catalog_cache`.
 - API para Power BI y Looker Studio/Data Studio con `/reports/public/*` protegida por `DASHBOARD_API_KEY`.
 
@@ -94,6 +94,8 @@ Mantener Patroni/etcd/HAProxy como línea base:
 - Backups base + WAL archiving.
 - Restore test documentado.
 - Métricas de replicación, lag y failover.
+
+El criterio operativo es que el backend use el endpoint de HAProxy `:5000`, no un PostgreSQL fijo. Si cae el lider, Patroni promueve una replica y HAProxy redirige escrituras al nuevo lider; el usuario puede notar unos segundos de reconexion, pero no una perdida sostenida de acceso.
 
 ### Fase 4: Kubernetes
 

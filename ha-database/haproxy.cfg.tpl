@@ -1,5 +1,5 @@
 global
-    maxconn 1000
+    maxconn 2000
 
 defaults
     log global
@@ -15,21 +15,22 @@ listen stats
     bind *:7000
     stats enable
     stats uri /
+    stats refresh 10s
 
 listen postgres_write
     bind *:5000
     option httpchk GET /master
     http-check expect status 200
     default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
-    server node1 ${NODE1_IP}:5432 maxconn 100 check port 8008
-    server node2 ${NODE2_IP}:5432 maxconn 100 check port 8008
-    server node3 ${NODE3_IP}:5432 maxconn 100 check port 8008
+    server oti ${NODE1_IP}:5432 maxconn 200 check port 8008
+    server ubuntu ${NODE2_IP}:5432 maxconn 200 check port 8008
+    server laptop ${NODE3_IP}:5432 maxconn 200 check port 8008
 
 listen postgres_read
     bind *:5001
     option httpchk GET /replica
     http-check expect status 200
     default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
-    server node1 ${NODE1_IP}:5432 maxconn 100 check port 8008
-    server node2 ${NODE2_IP}:5432 maxconn 100 check port 8008
-    server node3 ${NODE3_IP}:5432 maxconn 100 check port 8008
+    server oti ${NODE1_IP}:5432 maxconn 200 check port 8008
+    server ubuntu ${NODE2_IP}:5432 maxconn 200 check port 8008
+    server laptop ${NODE3_IP}:5432 maxconn 200 check port 8008
