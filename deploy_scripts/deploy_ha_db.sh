@@ -20,7 +20,7 @@ deploy_node() {
         cp ha-database/.env.ha ha-database/.env
         sed -i "s/NODE_ID=.*/NODE_ID=$id/" ha-database/.env
         sed -i "s/NODE_IP=.*/NODE_IP=$ip/" ha-database/.env
-        docker-compose -f ha-database/docker-compose.ha.yml up -d --build
+        docker compose -f ha-database/docker-compose.ha.yml up -d --build
     else
         ssh -o StrictHostKeyChecking=no -i $key azureuser@$ip "mkdir -p ~/FIQ/ha-database"
         scp -i $key ha-database/docker-compose.ha.yml ha-database/Dockerfile.patroni ha-database/haproxy.cfg ha-database/patroni.yml azureuser@$ip:~/FIQ/ha-database/
@@ -35,7 +35,7 @@ NODE3_IP=$NODE3_IP
 POSTGRES_PASSWORD=94d68a05f4e613b1b05eee4f
 REPLICATION_PASSWORD=fiq_repl_secret_2026
 EOF"
-        ssh -i $key azureuser@$ip "cd ~/FIQ/ha-database && docker-compose -f docker-compose.ha.yml up -d --build"
+        ssh -i $key azureuser@$ip "cd ~/FIQ/ha-database && docker compose -f docker-compose.ha.yml up -d --build"
     fi
 }
 

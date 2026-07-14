@@ -2,7 +2,7 @@
 
 ## 🌐 Entornos de Despliegue
 
-1.  **Desarrollo (Local):** Uso de `docker-compose` para orquestación local (API, DB, Redis).
+1.  **Desarrollo (Local):** Uso de Docker Compose V2 con `compose.yaml` y el comando `docker compose` para orquestación local (API, DB, MongoDB, Redis y MinIO).
 2.  **Pruebas / Staging (QA):** Namespace aislado en Kubernetes para validación de entregables.
 3.  **Producción:** Clúster Kubernetes de alta disponibilidad.
     *   **Autoescalado Horizontal (HPA):** Configurado para escalar dinámicamente entre 2 y 8 réplicas por microservicio cuando el uso de CPU o memoria exceda el 70%.

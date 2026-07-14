@@ -1,8 +1,8 @@
 # 04. Modelo de Datos (3NF)
 
-## 🗄️ Diseño de Base de Datos (PostgreSQL)
+## 🗄️ Diseño de Base de Datos (PostgreSQL + MongoDB)
 
-Modelo estrictamente normalizado hasta la Tercera Forma Normal (3NF) para garantizar la integridad y escalabilidad.
+Modelo relacional estrictamente normalizado hasta la Tercera Forma Normal (3NF) para garantizar integridad en PostgreSQL, complementado por MongoDB solo para documentos de auditoría enriquecida y cache temporal de catálogo externo.
 
 ### Diagrama de Entidad-Relación (ERD)
 
@@ -180,6 +180,50 @@ erDiagram
 ### 4. Dominio de Trazabilidad (Auditoría Avanzada)
 *   **`tipos_actividad`**: `id` (PK), `nombre`.
 *   **`registro_actividades`**: `id` (PK), `usuario_id` (FK), `tipo_actividad_id` (FK), `entidad_relacionada_id` (UUID), `fecha_hora`, `ip_origen`, `user_agent`, `detalle_accion` (JSONB).
+
+## 📄 Colecciones MongoDB
+
+### `activity_events`
+
+Colección documental para eventos de auditoría enriquecidos y extensibles. No reemplaza `registro_actividades`; lo complementa con payloads flexibles y consultas documentales.
+
+Campos principales:
+
+- `sql_activity_id`: referencia al registro transaccional en PostgreSQL.
+- `usuario_id`: UUID serializado como texto.
+- `tipo_actividad_id`: identificador del tipo en PostgreSQL.
+- `tipo_actividad`: nombre normalizado del evento.
+- `entidad_relacionada_id`: UUID serializado cuando aplica.
+- `occurred_at`: fecha del evento.
+- `ip_origen`: IP reportada por FastAPI.
+- `user_agent`: agente de usuario.
+- `detalle_accion`: documento flexible con metadatos de negocio.
+
+Índices creados al iniciar el backend cuando `MONGO_ENABLED=true`:
+
+- `occurred_at` descendente.
+- `usuario_id` + `occurred_at`.
+- `tipo_actividad` + `occurred_at`.
+
+### `external_catalog_cache`
+
+Colección documental para respuestas normalizadas de proveedores bibliográficos externos. Permite reducir latencia y dependencia de terceros sin convertir esos metadatos temporales en tablas relacionales.
+
+Campos principales:
+
+- `cache_key`: SHA-256 de tipo de búsqueda y parámetros normalizados.
+- `kind`: `books` o `articles`.
+- `params`: parámetros usados para la búsqueda.
+- `results`: lista de documentos con el mismo contrato de `ExternalWork`.
+- `warnings`: advertencias generadas durante la consulta.
+- `created_at`: fecha de creación del snapshot.
+- `expires_at`: fecha de expiración del cache.
+
+Índices:
+
+- `cache_key` único.
+- `expires_at` con TTL.
+- `kind` + `created_at`.
 
 ## 🔄 Flujo de Aprobación Académica
 

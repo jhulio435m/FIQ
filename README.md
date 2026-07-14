@@ -4,7 +4,7 @@ Biblioteca virtual y plataforma academica para la Facultad de Ingenieria Quimica
 
 ## Stack
 
-- Backend: FastAPI, SQLModel/SQLAlchemy, PostgreSQL, Redis, MinIO/S3, Alembic, UV.
+- Backend: FastAPI, SQLModel/SQLAlchemy, PostgreSQL, MongoDB, Redis, MinIO/S3, Alembic, UV.
 - Frontend: React 19, TypeScript 6, Vite 8, Tailwind v4, shadcn/ui, TanStack Query, Zustand.
 - Testing: Pytest, Vitest + React Testing Library + MSW, Playwright.
 - Infra local: Docker Compose.
@@ -24,6 +24,11 @@ Variables principales:
 
 - `DATABASE_URL`
 - `REDIS_URL`
+- `MONGO_ENABLED`
+- `MONGO_URL`
+- `MONGO_DB_NAME`
+- `MONGO_ACTIVITY_COLLECTION`
+- `MONGO_EXTERNAL_CACHE_COLLECTION`
 - `SECRET_KEY`
 - `S3_ENDPOINT`
 - `S3_ACCESS_KEY`
@@ -34,6 +39,7 @@ Variables principales:
 - `DASHBOARD_API_KEY` para endpoints `/reports/public/*`
 - `EXTERNAL_API_EMAIL` para uso identificado de OpenAlex/Crossref y habilitar Unpaywall.
 - `EXTERNAL_API_USER_AGENT` para identificar la plataforma ante APIs bibliograficas abiertas.
+- `EXTERNAL_CACHE_TTL_SECONDS` para controlar la vida util del cache Mongo de catalogo externo.
 
 ## Desarrollo local
 
@@ -41,6 +47,12 @@ Infraestructura:
 
 ```bash
 docker compose up -d postgres redis minio
+```
+
+Para probar la arquitectura de doble base de datos:
+
+```bash
+docker compose up -d postgres mongo redis minio
 ```
 
 Backend:
@@ -118,6 +130,14 @@ Permisos resumidos:
 - Tamano maximo `MAX_UPLOAD_SIZE`.
 - Clave de almacenamiento generada por servidor.
 - Auditoria `upload` o `upload_rejected`.
+
+## Doble base de datos
+
+PostgreSQL sigue siendo la fuente transaccional para usuarios, roles, cursos, recursos, estados, moderacion y reportes relacionales. MongoDB se usa solo para datos documentales que cambian de forma con frecuencia: eventos de auditoria enriquecidos en `activity_events` y cache de catalogo externo en `external_catalog_cache`.
+
+Cada llamada a `log_activity` mantiene el registro SQL en `registro_actividades` y, si `MONGO_ENABLED=true`, emite un documento Mongo con `detalle_accion`, IP, user agent, usuario, tipo, fecha y referencia al registro SQL. Si MongoDB no esta configurado, la operacion principal continua usando PostgreSQL.
+
+Las busquedas `GET /external/search/books` y `GET /external/search/articles` consultan primero `external_catalog_cache`. Si no hay entrada vigente, llaman a los proveedores externos, normalizan el resultado y guardan el documento con expiracion TTL. Esto reduce latencia, evita repetir llamadas y conserva snapshots temporales de metadatos bibliograficos.
 
 ## Integraciones bibliograficas externas
 

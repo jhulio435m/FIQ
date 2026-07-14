@@ -53,6 +53,7 @@ Contrato REST real generado por FastAPI y verificado con `npm run openapi:check`
 | `GET /labs` | Publica | Modulos de laboratorio, filtro `nivel_id`. |
 | `GET /labs/{module_id}` | Publica/JWT opcional | Detalle de modulo y registra `lab_access` si hay usuario. |
 | `GET /activity` | Admin | Logs de auditoria con filtros `skip`, `limit`, `usuario_id`, fechas. |
+| `GET /activity/events` | Admin | Eventos documentales de auditoria desde MongoDB con filtros `skip`, `limit`, `usuario_id`, `tipo_actividad` y fechas. |
 | `GET /reports/most-viewed` | Admin | Recursos mas consultados. |
 | `GET /reports/labs-usage` | Admin | Uso agregado de laboratorios. |
 | `GET /reports/public/dashboard-data` | API key | Dataset publico controlado para dashboard externo. |
@@ -189,6 +190,8 @@ Query params:
 
 Fuentes: Crossref, OpenAlex y Unpaywall. Unpaywall requiere `EXTERNAL_API_EMAIL`; si no existe, devuelve warning y no bloquea Crossref/OpenAlex.
 
+Cuando `MONGO_ENABLED=true`, las busquedas externas usan cache documental MongoDB en `external_catalog_cache`. La llave se calcula con el tipo de busqueda y parametros normalizados; en cache hit la respuesta conserva el mismo contrato e incluye una advertencia informativa de cache.
+
 ### `POST /resources/import-external`
 
 Request JSON:
@@ -237,6 +240,8 @@ Eventos esperados:
 | `resource_archive` | Archivado administrativo. |
 
 Campos registrados: usuario, tipo, fecha/hora, IP, user agent y detalle JSON con recurso, resultado o motivo.
+
+`GET /activity/events` consulta la colección MongoDB `activity_events` cuando `MONGO_ENABLED=true`. Devuelve documentos enriquecidos con `sql_activity_id`, `usuario_id`, `tipo_actividad`, `occurred_at`, IP, user agent y `detalle_accion`. Si MongoDB no está configurado, responde `503`.
 
 ## Verificacion
 

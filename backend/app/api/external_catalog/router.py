@@ -2,6 +2,11 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import APIRouter, Query
 
+from app.api.external_catalog.cache import (
+    build_cache_key,
+    get_cached_external_search,
+    set_cached_external_search,
+)
 from app.api.external_catalog.clients import (
     search_crossref,
     search_internet_archive,
@@ -45,6 +50,12 @@ async def search_books(
     isbn: str | None = Query(default=None, min_length=5, max_length=32),
     limit: int = Query(default=8, ge=1, le=20),
 ):
+    cache_params = {"q": q, "isbn": isbn, "limit": limit}
+    cache_key = build_cache_key("books", cache_params)
+    cached = await get_cached_external_search(cache_key)
+    if cached:
+        return cached
+
     results: list[ExternalWork] = []
     warnings: list[str] = []
     for provider, task in [
@@ -55,7 +66,14 @@ async def search_books(
         results.extend(provider_results)
         if warning:
             warnings.append(warning)
-    return ExternalSearchResponse(results=_dedupe(results)[: limit * 2], warnings=warnings)
+    response = ExternalSearchResponse(results=_dedupe(results)[: limit * 2], warnings=warnings)
+    await set_cached_external_search(
+        cache_key=cache_key,
+        kind="books",
+        params=cache_params,
+        response=response,
+    )
+    return response
 
 
 @router.get("/search/articles", response_model=ExternalSearchResponse)
@@ -64,6 +82,12 @@ async def search_articles(
     doi: str | None = Query(default=None, min_length=4, max_length=180),
     limit: int = Query(default=8, ge=1, le=20),
 ):
+    cache_params = {"q": q, "doi": doi, "limit": limit}
+    cache_key = build_cache_key("articles", cache_params)
+    cached = await get_cached_external_search(cache_key)
+    if cached:
+        return cached
+
     results: list[ExternalWork] = []
     warnings: list[str] = []
     for provider, task in [
@@ -75,4 +99,11 @@ async def search_articles(
         results.extend(provider_results)
         if warning:
             warnings.append(warning)
-    return ExternalSearchResponse(results=_dedupe(results)[: limit * 3], warnings=warnings)
+    response = ExternalSearchResponse(results=_dedupe(results)[: limit * 3], warnings=warnings)
+    await set_cached_external_search(
+        cache_key=cache_key,
+        kind="articles",
+        params=cache_params,
+        response=response,
+    )
+    return response

@@ -24,9 +24,9 @@ EOF
 fi
 
 # 2. Levantar servicios
-docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 
 # 3. Mostrar URL de TryCloudflare
 echo "⏳ Esperando a que el túnel de Cloudflare genere la URL..."
 sleep 10
-docker-compose -f docker-compose.prod.yml logs tunnel | grep "trycloudflare.com"
+docker compose -f docker-compose.prod.yml logs tunnel | grep "trycloudflare.com"

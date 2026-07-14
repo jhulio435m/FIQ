@@ -9,6 +9,12 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "postgresql://fiq:fiq123@localhost:5433/fiq_db"
     REDIS_URL: str = "redis://localhost:6379/0"
+    MONGO_ENABLED: bool = False
+    MONGO_URL: str = "mongodb://localhost:27017"
+    MONGO_DB_NAME: str = "fiq_events"
+    MONGO_ACTIVITY_COLLECTION: str = "activity_events"
+    MONGO_EXTERNAL_CACHE_COLLECTION: str = "external_catalog_cache"
+    MONGO_SERVER_SELECTION_TIMEOUT_MS: int = 3000
     SECRET_KEY: str = "dev-secret-key-change-in-production-32-bytes"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -30,6 +36,7 @@ class Settings(BaseSettings):
     EXTERNAL_API_EMAIL: str = ""
     EXTERNAL_API_USER_AGENT: str = "FIQ Plataforma Digital/1.0 (biblioteca virtual academica)"
     EXTERNAL_API_TIMEOUT_SECONDS: float = 8.0
+    EXTERNAL_CACHE_TTL_SECONDS: int = 86400
 
     model_config = ConfigDict(env_file=".env")
 

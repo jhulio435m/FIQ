@@ -15,8 +15,8 @@ La aplicación se dividirá en 4 capas principales, con un flujo de control unid
     *   **Función:** Contiene el "core" del proyecto y aplica las reglas de negocio. No sabe nada de HTTP ni de SQL puro.
     *   **Tecnología:** Clases o funciones puras de Python.
 3.  **Capa de Acceso a Datos (Repositories / CRUD):**
-    *   **Función:** Única capa autorizada para hablar con la base de datos (PostgreSQL).
-    *   **Tecnología:** SQLAlchemy (ORM).
+    *   **Función:** Única capa autorizada para hablar con las bases de datos.
+    *   **Tecnología:** SQLAlchemy/SQLModel para PostgreSQL y PyMongo Async para MongoDB.
 4.  **Capa de Modelos y Esquemas (Models & Schemas):**
     *   **Models:** Representan las tablas de PostgreSQL (SQLAlchemy).
     *   **Schemas:** Definen la estructura de los JSON (Pydantic).
@@ -52,8 +52,19 @@ graph TD
     Ingress --> FastAPI["⚡ FastAPI Backend (API)"]
     ReactUI --> FastAPI
     FastAPI --> Redis[("💾 Redis (Caché)")]
-    FastAPI --> PostgreSQL[("🗄️ PostgreSQL (DB)")]
+    FastAPI --> PostgreSQL[("🗄️ PostgreSQL (DB transaccional)")]
+    FastAPI --> MongoDB[("📄 MongoDB (eventos documentales)")]
     FastAPI --> S3[("📦 Object Storage (S3)")]
     ReactUI -.-> S3
 ```
 
+## Estrategia de Persistencia Políglota
+
+La plataforma usa dos bases de datos con responsabilidades separadas:
+
+- **PostgreSQL:** fuente de verdad para datos relacionales y transaccionales: usuarios, roles, recursos, cursos, laboratorios, estados, moderación y agregados de reportes.
+- **MongoDB:** almacén documental para datos flexibles o de alto crecimiento, empezando por `activity_events` y `external_catalog_cache`, donde los eventos y snapshots de proveedores externos pueden cambiar de forma sin crear nuevas migraciones SQL.
+
+El patrón inicial es escritura dual controlada: `log_activity` guarda primero en PostgreSQL y luego emite un documento Mongo con la referencia `sql_activity_id`. Si MongoDB no está configurado, los flujos principales siguen funcionando con PostgreSQL.
+
+Para catálogo externo se usa cache-aside: el router busca primero en MongoDB por una llave normalizada de búsqueda; en cache miss consulta Open Library, Internet Archive, Crossref, OpenAlex o Unpaywall, y guarda la respuesta normalizada con TTL.

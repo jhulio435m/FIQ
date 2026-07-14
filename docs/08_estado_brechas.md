@@ -2,7 +2,7 @@
 
 ## Alcance de la revision
 
-Revision ejecutada contra la documentacion `docs/01` a `docs/07`, `README.md`, `AGENTS.md`, skills locales de FastAPI, React, testing, Playwright y migraciones, y el codigo actual de `backend/`, `frontend/`, `docker-compose.yml` y `.github/workflows/ci.yml`.
+Revision ejecutada contra la documentacion `docs/01` a `docs/07`, `README.md`, `AGENTS.md`, skills locales de FastAPI, React, testing, Playwright y migraciones, y el codigo actual de `backend/`, `frontend/`, `compose.yaml` y `.github/workflows/ci.yml`.
 
 ## Estado verificado del producto
 

@@ -3,8 +3,10 @@ from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.external_catalog import router as external_router
+from app.api.external_catalog.cache import build_cache_key
 from app.api.external_catalog.schemas import ExternalWork
 from app.api.resources import router as resources_router
+from app.logs import crud as logs_crud
 from app.models.activity import RegistroActividad
 from app.models.resource import Recurso
 from tests.conftest import seed_reference_data
@@ -253,6 +255,48 @@ async def test_upload_rejects_oversized_file_without_persisting_metadata(
     assert await resource_count(db) == before
 
 
+async def test_activity_log_dual_writes_to_sql_and_mongo_document(
+    db: AsyncSession,
+    monkeypatch,
+) -> None:
+    ids = await seed_reference_data(db)
+    inserted_documents: list[dict[str, object]] = []
+
+    class FakeMongoCollection:
+        async def insert_one(self, document: dict[str, object]):
+            inserted_documents.append(document)
+
+    monkeypatch.setattr(
+        logs_crud,
+        "get_activity_events_collection",
+        lambda: FakeMongoCollection(),
+    )
+
+    activity = await logs_crud.log_activity(
+        db,
+        usuario_id=ids["teacher_id"],
+        tipo_actividad_id=4,
+        ip_origen="127.0.0.1",
+        user_agent="pytest",
+        detalle_accion={"resource_id": 10, "nested": {"owner": ids["teacher_id"]}},
+    )
+
+    assert activity.id is not None
+    activity_result = await db.execute(select(RegistroActividad))
+    assert len(activity_result.scalars().all()) == 1
+
+    assert len(inserted_documents) == 1
+    document = inserted_documents[0]
+    assert document["sql_activity_id"] == activity.id
+    assert document["usuario_id"] == str(ids["teacher_id"])
+    assert document["tipo_actividad"] == "upload"
+    assert document["ip_origen"] == "127.0.0.1"
+    assert document["detalle_accion"] == {
+        "resource_id": 10,
+        "nested": {"owner": str(ids["teacher_id"])},
+    }
+
+
 async def test_upload_requires_authentication_and_allowed_role(
     client: AsyncClient,
     db: AsyncSession,
@@ -341,6 +385,87 @@ async def test_external_book_search_aggregates_providers_without_network(
     payload = response.json()
     assert [item["source"] for item in payload["results"]] == ["open_library", "internet_archive"]
     assert payload["warnings"] == []
+
+
+async def test_external_book_search_uses_mongo_cache_without_provider_calls(
+    client: AsyncClient,
+    monkeypatch,
+) -> None:
+    cache_key = build_cache_key("books", {"q": "termodinamica", "isbn": None, "limit": 8})
+
+    async def fake_cached(key: str):
+        assert key == cache_key
+        return external_router.ExternalSearchResponse(
+            results=[
+                ExternalWork(
+                    source="mongo_cache",
+                    external_id="cached-1",
+                    resource_type="book",
+                    title="Termodinamica cacheada",
+                )
+            ],
+            warnings=["Resultado servido desde cache documental MongoDB."],
+        )
+
+    async def fail_provider(*args, **kwargs):
+        raise AssertionError("provider should not be called on cache hit")
+
+    monkeypatch.setattr(external_router, "get_cached_external_search", fake_cached)
+    monkeypatch.setattr(external_router, "search_open_library", fail_provider)
+    monkeypatch.setattr(external_router, "search_internet_archive", fail_provider)
+
+    response = await client.get("/external/search/books", params={"q": "termodinamica"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["results"][0]["title"] == "Termodinamica cacheada"
+    assert payload["warnings"] == ["Resultado servido desde cache documental MongoDB."]
+
+
+async def test_external_article_search_persists_mongo_cache_after_provider_query(
+    client: AsyncClient,
+    monkeypatch,
+) -> None:
+    cached_payloads: list[dict[str, object]] = []
+
+    async def no_cached(key: str):
+        return None
+
+    async def fake_set_cached(**kwargs):
+        cached_payloads.append(kwargs)
+
+    async def fake_crossref(q: str | None, doi: str | None, limit: int):
+        assert q == "catalisis"
+        assert doi is None
+        assert limit == 8
+        return [
+            ExternalWork(
+                source="crossref",
+                external_id="10.1234/catalisis",
+                resource_type="article",
+                title="Catalisis aplicada",
+                doi="10.1234/catalisis",
+            )
+        ]
+
+    async def empty_provider(*args, **kwargs):
+        return []
+
+    monkeypatch.setattr(external_router, "get_cached_external_search", no_cached)
+    monkeypatch.setattr(external_router, "set_cached_external_search", fake_set_cached)
+    monkeypatch.setattr(external_router, "search_crossref", fake_crossref)
+    monkeypatch.setattr(external_router, "search_openalex", empty_provider)
+    monkeypatch.setattr(external_router, "search_unpaywall", empty_provider)
+
+    response = await client.get("/external/search/articles", params={"q": "catalisis"})
+
+    assert response.status_code == 200
+    assert response.json()["results"][0]["title"] == "Catalisis aplicada"
+    assert len(cached_payloads) == 1
+    cached = cached_payloads[0]
+    assert cached["kind"] == "articles"
+    assert cached["params"] == {"q": "catalisis", "doi": None, "limit": 8}
+    assert cached["response"].results[0].doi == "10.1234/catalisis"
 
 
 async def test_teacher_can_import_external_resource_as_pending_and_doi_is_unique(

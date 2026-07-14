@@ -1,7 +1,10 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.mongo import close_mongo, init_mongo
 from app.core.users import auth_backend_jwt, auth_backend_cookie, fastapi_users
 from app.schemas.user import UserRead, UserCreate, UserUpdate
 from app.api.auth.router import router as auth_router
@@ -12,11 +15,22 @@ from app.api.external_catalog.router import router as external_catalog_router
 from app.logs.router import router as logs_router
 from app.reports.router import router as reports_router
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_mongo()
+    try:
+        yield
+    finally:
+        await close_mongo()
+
+
 app = FastAPI(
     title=f"{settings.PROJECT_NAME} (PRO)",
     version=settings.VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
