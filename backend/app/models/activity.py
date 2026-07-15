@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 import uuid
-from sqlmodel import Field, Relationship, SQLModel, JSON, Column
+from sqlmodel import Field, SQLModel, JSON, Column
 
 
 class TipoActividad(SQLModel, table=True):

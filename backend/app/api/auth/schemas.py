@@ -8,10 +8,14 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     access_token: str
-    refresh_token: str
     token_type: str = "bearer"
     usuario: dict
 
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
+
+class MicrosoftLoginRequest(BaseModel):
+    code: str
+    redirect_uri: str

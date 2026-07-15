@@ -6,8 +6,8 @@ Red privada prevista para Kubernetes HA, Patroni/etcd y MongoDB replica set.
 
 | Nodo | Host público/Tailscale | WireGuard |
 | :--- | :--- | :--- |
-| `fiq-node-1` | `oti@100.79.244.99` | `10.77.0.1/24` |
-| `fiq-node-2` | `ubuntu@147.224.242.204` | `10.77.0.2/24` |
+| `fiq-node-1` | `oti@100.79.244.99` | `10.77.0.2/24` |
+| `fiq-node-2` | `ubuntu@147.224.242.204` | `10.77.0.1/24` |
 | `fiq-node-3` | local `100.126.122.28` | `10.77.0.3/24` |
 | `fiq-watcher-1` | `jhulio@167.234.255.122` | `10.77.0.10/24` opcional |
 

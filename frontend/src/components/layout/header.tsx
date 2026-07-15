@@ -5,10 +5,11 @@ import { User, LogOut, Bell } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { getPendingResources } from "@/services/resources"
 import { ModeToggle } from "@/components/mode-toggle"
+import { isAdmin as checkIsAdmin } from "@/lib/auth"
 
 export function Header() {
   const { user, logout, isAuthenticated } = useAuthStore()
-  const isAdmin = user?.rol === "Admin"
+  const isAdmin = checkIsAdmin(user)
 
   const { data: pendingResources = [] } = useQuery({
     queryKey: ["pending-resources"],

@@ -8,12 +8,11 @@ class UserRead(schemas.BaseUser[uuid.UUID]):
     rol_id: int
     esta_activo: bool
     rol: str
-    rol_nombre: str
 
 
 class UserCreate(schemas.BaseUserCreate):
     nombre: str
-    rol_id: Optional[int] = 1
+    rol_id: Optional[int] = 3
 
 
 class UserUpdate(schemas.BaseUserUpdate):

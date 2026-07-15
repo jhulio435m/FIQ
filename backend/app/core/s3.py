@@ -6,6 +6,9 @@ import aioboto3
 from fastapi import UploadFile
 
 from app.core.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 class S3Service:
     def __init__(self):
@@ -39,11 +42,11 @@ class S3Service:
                         ["content-length-range", 0, settings.MAX_UPLOAD_SIZE]
                     ]
                 )
-                if response and "minio:9000" in response["url"]:
-                    response["url"] = response["url"].replace("minio:9000", "localhost:9000")
+                if response and getattr(settings, "S3_PUBLIC_URL", ""):
+                    response["url"] = response["url"].replace(settings.S3_ENDPOINT, settings.S3_PUBLIC_URL)
                 return response, key
             except Exception as e:
-                print(f"Error generating presigned post: {e}")
+                logger.error("Error generating presigned post", exc_info=e)
                 return None, None
 
     async def get_presigned_url(self, file_path: str, expiration: int = 3600) -> str:
@@ -55,11 +58,11 @@ class S3Service:
                     Params={"Bucket": self.bucket_name, "Key": file_path},
                     ExpiresIn=expiration,
                 )
-                if "minio:9000" in url:
-                    url = url.replace("minio:9000", "localhost:9000")
+                if getattr(settings, "S3_PUBLIC_URL", ""):
+                    url = url.replace(settings.S3_ENDPOINT, settings.S3_PUBLIC_URL)
                 return url
             except Exception as e:
-                print(f"Error generating presigned URL: {e}")
+                logger.error("Error generating presigned URL", exc_info=e)
                 return ""
 
     async def upload_file(self, file: UploadFile, folder: str = "resources", safe_filename: str | None = None) -> str:
