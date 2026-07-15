@@ -16,9 +16,14 @@ from app.logs.router import router as logs_router
 from app.reports.router import router as reports_router
 
 
+from app.core.database import async_session_maker
+from app.core.cache import preload_activity_types
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_mongo()
+    async with async_session_maker() as session:
+        await preload_activity_types(session)
     try:
         yield
     finally:

@@ -541,7 +541,7 @@ async def test_powerbi_document_metrics_returns_empty_payload_without_mongo(
 
     response = await client.get(
         "/reports/public/document-metrics",
-        params={"api_key": "test-key"},
+        headers={"X-API-Key": "test-key"},
     )
 
     assert response.status_code == 200
@@ -559,7 +559,7 @@ async def test_powerbi_document_metrics_requires_api_key(
 
     response = await client.get(
         "/reports/public/document-metrics",
-        params={"api_key": "wrong-key"},
+        headers={"X-API-Key": "wrong-key"},
     )
 
     assert response.status_code == 401
@@ -573,7 +573,7 @@ async def test_looker_studio_schema_requires_api_key(
 
     response = await client.get(
         "/reports/public/looker-studio/schema/resources",
-        params={"api_key": "wrong-key"},
+        headers={"X-API-Key": "wrong-key"},
     )
 
     assert response.status_code == 401
@@ -606,11 +606,11 @@ async def test_looker_studio_resources_returns_flat_rows(
 
     schema_response = await client.get(
         "/reports/public/looker-studio/schema/resources",
-        params={"api_key": "test-key"},
+        headers={"X-API-Key": "test-key"},
     )
     data_response = await client.get(
         "/reports/public/looker-studio/data/resources",
-        params={"api_key": "test-key"},
+        headers={"X-API-Key": "test-key"},
     )
 
     assert schema_response.status_code == 200
@@ -632,10 +632,29 @@ async def test_looker_studio_users_omits_email(
 
     response = await client.get(
         "/reports/public/looker-studio/data/users",
-        params={"api_key": "test-key"},
+        headers={"X-API-Key": "test-key"},
     )
 
     assert response.status_code == 200
     row = response.json()["rows"][0]
+    assert "email" not in row
+    assert row["rol"] in {"Admin", "Docente", "Estudiante"}
+
+
+async def test_public_dashboard_users_omits_email(
+    client: AsyncClient,
+    db: AsyncSession,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(reports_router.settings, "DASHBOARD_API_KEY", "test-key")
+    await seed_reference_data(db)
+
+    response = await client.get(
+        "/reports/public/users",
+        headers={"X-API-Key": "test-key"},
+    )
+
+    assert response.status_code == 200
+    row = response.json()[0]
     assert "email" not in row
     assert row["rol"] in {"Admin", "Docente", "Estudiante"}

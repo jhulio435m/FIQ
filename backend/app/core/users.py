@@ -23,22 +23,26 @@ async def get_user_db(session=Depends(get_db)):
 
 # --- User Manager ---
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     reset_password_token_secret = settings.SECRET_KEY
     verification_token_secret = settings.SECRET_KEY
 
     async def on_after_register(self, user: User, request: Optional[Request] = None):
-        print(f"User {user.id} has registered.")
+        logger.info(f"User {user.id} has registered.")
 
     async def on_after_forgot_password(
         self, user: User, token: str, request: Optional[Request] = None
     ):
-        print(f"User {user.id} forgot their password. Reset token: {token}")
+        logger.info(f"User {user.id} forgot their password. Reset token: {token}")
 
     async def on_after_request_verify(
         self, user: User, token: str, request: Optional[Request] = None
     ):
-        print(f"Verification requested for user {user.id}. Verification token: {token}")
+        logger.info(f"Verification requested for user {user.id}. Verification token: {token}")
 
 
 async def get_user_manager(user_db=Depends(get_user_db)):
@@ -51,10 +55,10 @@ async def get_user_manager(user_db=Depends(get_user_db)):
 bearer_transport = BearerTransport(tokenUrl="auth/jwt/login")
 
 # 2. Cookie Transport (Secure HttpOnly)
-cookie_transport = CookieTransport(cookie_max_age=3600, cookie_secure=False) # Set secure=True in prod
+cookie_transport = CookieTransport(cookie_max_age=3600, cookie_secure=not settings.DEBUG)
 
 def get_jwt_strategy() -> JWTStrategy:
-    return JWTStrategy(secret=settings.SECRET_KEY, lifetime_seconds=3600)
+    return JWTStrategy(secret=settings.SECRET_KEY, lifetime_seconds=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
 
 
 auth_backend_jwt = AuthenticationBackend(

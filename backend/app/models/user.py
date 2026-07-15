@@ -28,9 +28,5 @@ class User(SQLModelBaseUserDB, table=True):
         return roles.get(self.rol_id, "Estudiante")
 
     @property
-    def rol_nombre(self) -> str:
-        return self.rol
-
-    @property
     def is_effectively_active(self) -> bool:
         return self.is_active and self.esta_activo

@@ -7,17 +7,15 @@ import { ResourceDetail } from "@/components/library/resource-detail"
 import { UploadDialog } from "@/components/library/upload-dialog"
 import { ExternalCatalogPanel } from "@/components/library/external-catalog-panel"
 import { getResources } from "@/services/resources"
-import api from "@/services/api"
 import { useDebounce } from "@/hooks/use-debounce"
 import { Button } from "@/components/ui/button"
 import { useAuthStore } from "@/stores/auth"
 import { SlidersHorizontal, X } from "lucide-react"
-import type { Recurso } from "@/services/resources"
+import type { Recurso, TipoRecurso } from "@/services/resources"
+import { useResourceTypes } from "@/hooks/use-resource-data"
+import { canUpload } from "@/lib/auth"
 
-interface TipoRecurso {
-  id: number
-  nombre: string
-}
+
 
 export default function Biblioteca() {
   const [search, setSearch] = useState("")
@@ -29,18 +27,11 @@ export default function Biblioteca() {
   const [cursoFilter, setCursoFilter] = useState("all")
 
   const { user } = useAuthStore()
-  const canUpload = user?.rol === "Admin" || user?.rol === "Docente"
+  const userCanUpload = canUpload(user)
 
   const debouncedSearch = useDebounce(search, 400)
 
-  const { data: tipos = [] } = useQuery<TipoRecurso[]>({
-    queryKey: ["resource-types"],
-    queryFn: async () => {
-      const { data } = await api.get("/resources/types")
-      return data
-    },
-    staleTime: 1000 * 60 * 10,
-  })
+  const { data: tipos = [] } = useResourceTypes()
 
   const { data: resources = [], isLoading } = useQuery({
     queryKey: ["resources", debouncedSearch, typeFilter],
@@ -79,7 +70,7 @@ export default function Biblioteca() {
             <h1 className="text-2xl font-bold text-brand-900 dark:text-brand-100 mb-3">Biblioteca Virtual</h1>
             <SearchBar value={search} onChange={setSearch} placeholder="Buscar por título, materia, autor..." />
           </div>
-          {canUpload && (
+          {userCanUpload && (
             <div className="pb-1">
               <UploadDialog />
             </div>
@@ -151,7 +142,7 @@ export default function Biblioteca() {
               isLoading={isLoading}
               onSelect={handleSelect}
             />
-            <ExternalCatalogPanel query={debouncedSearch} tipos={tipos} canImport={canUpload} />
+            <ExternalCatalogPanel query={debouncedSearch} tipos={tipos} canImport={userCanUpload} />
           </div>
         </div>
       </div>

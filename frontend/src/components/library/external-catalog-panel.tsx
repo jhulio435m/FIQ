@@ -12,10 +12,7 @@ import {
 } from "@/services/external-catalog"
 import { toast } from "sonner"
 
-interface TipoRecurso {
-  id: number
-  nombre: string
-}
+import type { TipoRecurso } from "@/services/resources"
 
 interface ExternalCatalogPanelProps {
   query: string

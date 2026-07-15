@@ -13,7 +13,7 @@ if config.config_file_name is not None:
 from app.core.config import settings
 from app.models.user import Rol, User
 from app.models.resource import Curso, EstadoRecurso, Recurso, RecursoEstadoHistorial, TipoRecurso
-from app.api.labs.models import NivelDificultad, ModuloLaboratorio
+from app.models.lab import NivelDificultad, ModuloLaboratorio
 from app.models.activity import RegistroActividad, TipoActividad
 
 target_metadata = SQLModel.metadata

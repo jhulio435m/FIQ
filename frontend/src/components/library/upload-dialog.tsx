@@ -1,7 +1,7 @@
 import { useState } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
-import type { FieldErrors, Resolver } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import {
   Dialog,
@@ -23,8 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { UploadCloud, FileText, Loader2, FileUp, CheckCircle2 } from "lucide-react"
-import api from "@/services/api"
 import { uploadResource } from "@/services/resources"
+import { useResourceTypes, useCourses } from "@/hooks/use-resource-data"
 import { toast } from "sonner"
 
 const uploadSchema = z.object({
@@ -42,24 +42,6 @@ const uploadSchema = z.object({
 
 type UploadFormValues = z.infer<typeof uploadSchema>
 
-const uploadResolver: Resolver<UploadFormValues> = async (values) => {
-  const result = uploadSchema.safeParse(values)
-  if (result.success) {
-    return { values: result.data, errors: {} }
-  }
-
-  const errors: FieldErrors<UploadFormValues> = {}
-  for (const issue of result.error.issues) {
-    const field = issue.path[0]
-    if (typeof field === "string" && field in values) {
-      errors[field as keyof UploadFormValues] = {
-        type: issue.code,
-        message: issue.message,
-      }
-    }
-  }
-  return { values: {}, errors }
-}
 
 export function UploadDialog() {
   const [open, setOpen] = useState(false)
@@ -67,24 +49,11 @@ export function UploadDialog() {
   const [uploadStep, setUploadStep] = useState<"idle" | "uploading" | "success">("idle")
   const queryClient = useQueryClient()
 
-  const { data: tipos = [] } = useQuery<{ id: number; nombre: string }[]>({
-    queryKey: ["resource-types"],
-    queryFn: async () => {
-      const { data } = await api.get("/resources/types")
-      return data
-    },
-  })
-
-  const { data: cursos = [] } = useQuery<{ id: number; nombre: string }[]>({
-    queryKey: ["cursos-list"],
-    queryFn: async () => {
-      const { data } = await api.get("/resources/courses")
-      return data
-    },
-  })
+  const { data: tipos = [] } = useResourceTypes()
+  const { data: cursos = [] } = useCourses()
 
   const form = useForm<UploadFormValues>({
-    resolver: uploadResolver,
+    resolver: zodResolver(uploadSchema),
     defaultValues: {
       titulo: "",
       resumen: "",

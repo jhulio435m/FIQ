@@ -15,7 +15,6 @@ class RecursoRead(SQLModel):
     tipo_recurso_id: int
     subido_por: uuid.UUID
     estado_id: int
-    curso_id: Optional[int] = None
     visualizaciones: int
     descargas: int
     created_at: datetime
@@ -42,11 +41,7 @@ class RecursoCreate(SQLModel):
     anio: Optional[int] = None
 
 
-class ResourceUploadResponse(SQLModel):
-    id: int
-    titulo: str
-    estado_id: int
-    url_archivo: str
+
 
 
 class ResourceModeration(SQLModel):

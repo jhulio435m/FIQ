@@ -1,14 +1,14 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
-from typing import List
 
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "FIQ Plataforma Digital"
     VERSION: str = "1.0.0"
+    DEBUG: bool = False
 
     DATABASE_URL: str = "postgresql://fiq:fiq123@localhost:5433/fiq_db"
-    REDIS_URL: str = "redis://localhost:6379/0"
+    # REDIS_URL: str = "redis://localhost:6379/0" # TODO: uncomment when implementing rate limiting
     MONGO_ENABLED: bool = False
     MONGO_URL: str = "mongodb://localhost:27017"
     MONGO_DB_NAME: str = "fiq_events"
@@ -21,11 +21,12 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     S3_ENDPOINT: str = "http://localhost:9000"
+    S3_PUBLIC_URL: str = ""
     S3_ACCESS_KEY: str = "minioadmin"
     S3_SECRET_KEY: str = "minioadmin"
     S3_BUCKET_NAME: str = "fiq-recursos"
 
-    CORS_ORIGINS: List[str] = ["http://localhost:5173"]
+    CORS_ORIGINS: list[str] = ["http://localhost:5173"]
     MAX_UPLOAD_SIZE: int = 20 * 1024 * 1024
 
     MICROSOFT_CLIENT_ID: str = ""
@@ -38,7 +39,7 @@ class Settings(BaseSettings):
     EXTERNAL_API_TIMEOUT_SECONDS: float = 8.0
     EXTERNAL_CACHE_TTL_SECONDS: int = 86400
 
-    model_config = ConfigDict(env_file=".env")
+    model_config = ConfigDict(env_file=".env", extra="ignore")
 
 
 settings = Settings()

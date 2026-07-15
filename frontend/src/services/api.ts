@@ -1,4 +1,5 @@
 import axios from "axios"
+import { useAuthStore } from "@/stores/auth"
 
 function getStoredAccessToken() {
   try {
@@ -28,8 +29,8 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401 && !window.location.pathname.includes("/login")) {
-      // localStorage.removeItem("access_token")
-      // window.location.href = "/login"
+      useAuthStore.getState().logout()
+      window.location.href = "/login"
     }
     return Promise.reject(err)
   },

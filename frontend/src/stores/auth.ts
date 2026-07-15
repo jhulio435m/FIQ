@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import type { Usuario } from "@/types/user"
+import { logout as apiLogout } from "@/services/auth"
 
 interface AuthState {
   user: Usuario | null
@@ -54,11 +55,17 @@ export const useAuthStore = create<AuthState>((set, get) => {
       storage.setItem("user", JSON.stringify(user))
       set({ user, accessToken: token })
     },
-    logout: () => {
-      const storage = getStorage()
-      storage.removeItem("access_token")
-      storage.removeItem("user")
-      set({ user: null, accessToken: null })
+    logout: async () => {
+      try {
+        await apiLogout()
+      } catch (_) {
+        // ignore
+      } finally {
+        const storage = getStorage()
+        storage.removeItem("access_token")
+        storage.removeItem("user")
+        set({ user: null, accessToken: null })
+      }
     },
     isAuthenticated: () => get().accessToken !== null,
   }

@@ -22,6 +22,16 @@ export interface Recurso {
   anio?: number | null
 }
 
+export interface TipoRecurso {
+  id: number
+  nombre: string
+}
+
+export interface Curso {
+  id: number
+  nombre: string
+}
+
 export interface SearchParams {
   search?: string
   tipo_recurso_id?: number
@@ -31,6 +41,16 @@ export interface SearchParams {
 
 export async function getResources(params: SearchParams = {}) {
   const { data } = await api.get<Recurso[]>("/resources", { params })
+  return data
+}
+
+export async function getResourceTypes() {
+  const { data } = await api.get<TipoRecurso[]>("/resources/types")
+  return data
+}
+
+export async function getCourses() {
+  const { data } = await api.get<Curso[]>("/resources/courses")
   return data
 }
 

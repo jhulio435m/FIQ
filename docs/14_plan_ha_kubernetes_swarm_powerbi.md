@@ -14,8 +14,8 @@ El clúster HA se planifica con tres nodos de capacidad suficiente y un watcher 
 
 | Nodo | Host | Acceso | Rol previsto | IP privada objetivo |
 | :--- | :--- | :--- | :--- | :--- |
-| `fiq-node-1` | `100.79.244.99` | `oti@100.79.244.99` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.1` |
-| `fiq-node-2` | `147.224.242.204` | `ubuntu@147.224.242.204` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.2` |
+| `fiq-node-1` | `100.79.244.99` | `oti@100.79.244.99` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.2` |
+| `fiq-node-2` | `147.224.242.204` | `ubuntu@147.224.242.204` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.1` |
 | `fiq-node-3` | `arch` local | este equipo, Tailscale `100.126.122.28` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.3` |
 | `fiq-watcher-1` | `167.234.255.122` | `jhulio@167.234.255.122` | Watcher externo, health checks, alertas | `10.77.0.10` opcional |
 
@@ -26,7 +26,7 @@ Esta topología sí permite quorum de 3 miembros para Kubernetes/etcd, Patroni y
 Estado operativo inicial:
 
 - `fiq-node-1` ya tiene Tailscale y `wireguard-tools`.
-- `fiq-node-2` tiene `sudo` sin contraseña, 4 vCPU, 23 GiB RAM y 45 GiB de disco; pendiente instalar WireGuard/k3s.
+- `fiq-node-2` tiene `sudo` sin contraseña, 4 vCPU, 23 GiB RAM, 45 GiB de disco y WireGuard operativo; pendiente instalar k3s.
 - `fiq-node-3` ya tiene Tailscale y `wireguard-tools`.
 - `fiq-watcher-1` tiene `sudo`, 2 vCPU y 1 GiB RAM; usar solo para watcher.
 
@@ -59,7 +59,7 @@ flowchart TD
 ### Fase 0: Base ya disponible
 
 - `compose.yaml` local con PostgreSQL, MongoDB, Redis, MinIO, backend y frontend.
-- PostgreSQL HA preparado con Patroni/etcd/HAProxy en `ha-database/`; queda listo para ejecutar despliegue, migracion de datos y prueba de failover.
+- PostgreSQL HA desplegado y validado con Patroni/etcd/HAProxy en `ha-database/` sobre WireGuard. Ultimo check operativo: `oti` (`10.77.0.2`) como primario, `ubuntu` (`10.77.0.1`) y `laptop` (`10.77.0.3`) como replicas en streaming.
 - MongoDB documental para `activity_events` y `external_catalog_cache`.
 - API para Power BI y Looker Studio/Data Studio con `/reports/public/*` protegida por `DASHBOARD_API_KEY`.
 

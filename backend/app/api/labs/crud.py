@@ -3,7 +3,7 @@ from typing import Optional
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.labs.models import ModuloLaboratorio
+from app.models.lab import ModuloLaboratorio
 
 
 async def get_modules(db: AsyncSession, nivel_id: Optional[int] = None):

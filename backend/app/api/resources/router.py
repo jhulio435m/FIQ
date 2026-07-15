@@ -27,94 +27,25 @@ from app.schemas.resource import (
 )
 from app.logs.crud import log_activity
 
-router = APIRouter()
+from app.api.resources.crud import (
+    _activity_type,
+    _state_id,
+    _resource_payload,
+    _resource_list_payload
+)
+from app.api.resources.upload import (
+    _safe_upload_filename,
+    _assert_pdf_upload,
+    _log_upload_rejected,
+    PDF_MIME_TYPES
+)
+from app.api.resources.service import (
+    process_approve_resource,
+    process_observe_resource,
+    process_archive_resource
+)
 
-PDF_MIME_TYPES = {"application/pdf", "application/x-pdf"}
-PDF_EXTENSION = ".pdf"
-
-
-async def _activity_type(db: AsyncSession, name: str) -> TipoActividad | None:
-    result = await db.execute(select(TipoActividad).where(TipoActividad.nombre == name))
-    return result.scalar_one_or_none()
-
-
-async def _state_id(db: AsyncSession, name: str) -> int:
-    result = await db.execute(select(EstadoRecurso).where(EstadoRecurso.nombre == name))
-    state = result.scalar_one_or_none()
-    if not state or state.id is None:
-        raise HTTPException(status_code=500, detail=f"Estado de recurso no configurado: {name}")
-    return state.id
-
-
-async def _resource_payload(db: AsyncSession, recurso: Recurso) -> dict:
-    tipo_nombre = None
-    curso_nombre = None
-    tipo = await db.get(TipoRecurso, recurso.tipo_recurso_id)
-    if tipo:
-        tipo_nombre = tipo.nombre
-    if recurso.curso_id:
-        curso = await db.get(Curso, recurso.curso_id)
-        if curso:
-            curso_nombre = curso.nombre
-    data = recurso.model_dump()
-    data["tipo_recurso_nombre"] = tipo_nombre
-    data["curso_nombre"] = curso_nombre
-    return data
-
-
-async def _resource_list_payload(db: AsyncSession, recursos: list[Recurso]) -> list[dict]:
-    return [await _resource_payload(db, recurso) for recurso in recursos]
-
-
-def _safe_upload_filename(filename: str | None) -> str:
-    if not filename:
-        raise HTTPException(status_code=422, detail="El archivo debe incluir nombre")
-    basename = Path(filename).name
-    if basename != filename or ".." in Path(filename).parts:
-        raise HTTPException(status_code=422, detail="Nombre de archivo no permitido")
-    suffixes = [suffix.lower() for suffix in Path(basename).suffixes]
-    if suffixes != [PDF_EXTENSION]:
-        raise HTTPException(status_code=415, detail="Solo se permiten archivos PDF con extensión .pdf")
-    return s3_service.sanitize_filename(basename)
-
-
-def _assert_pdf_upload(file: UploadFile, content: bytes) -> str:
-    safe_name = _safe_upload_filename(file.filename)
-    if file.content_type not in PDF_MIME_TYPES:
-        raise HTTPException(status_code=415, detail="Solo se permiten archivos PDF")
-    if not content:
-        raise HTTPException(status_code=422, detail="El archivo está vacío")
-    if len(content) > settings.MAX_UPLOAD_SIZE:
-        raise HTTPException(status_code=413, detail="El archivo excede el tamaño máximo permitido")
-    if not content.startswith(b"%PDF"):
-        raise HTTPException(status_code=415, detail="El archivo no es un PDF válido")
-    if b"%%EOF" not in content[-2048:]:
-        raise HTTPException(status_code=422, detail="El archivo PDF está corrupto o incompleto")
-    return safe_name
-
-
-async def _log_upload_rejected(
-    db: AsyncSession,
-    request: Request,
-    user: User,
-    reason: str,
-    filename: str | None,
-) -> None:
-    tipo = await _activity_type(db, "upload_rejected")
-    if not tipo:
-        return
-    await log_activity(
-        db,
-        usuario_id=user.id,
-        tipo_actividad_id=tipo.id,
-        ip_origen=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-        detalle_accion={
-            "resultado": "fallido",
-            "motivo": reason,
-            "archivo": s3_service.sanitize_filename(filename),
-        },
-    )
+router = APIRouter(redirect_slashes=False)
 
 
 @router.get("/types", response_model=List[TipoRecursoRead])
@@ -474,30 +405,7 @@ async def approve_resource(
     recurso = await db.get(Recurso, resource_id)
     if not recurso:
         raise HTTPException(status_code=404, detail="Recurso no encontrado")
-    approved_id = await _state_id(db, "Aprobado")
-    previous_state = recurso.estado_id
-    recurso.estado_id = approved_id
-    db.add(RecursoEstadoHistorial(
-        recurso_id=recurso.id,
-        estado_anterior_id=previous_state,
-        estado_nuevo_id=approved_id,
-        comentario=data.comentario if data else None,
-        cambiado_por=user.id,
-    ))
-    await db.commit()
-    await db.refresh(recurso)
-
-    tipo = await _activity_type(db, "resource_approve")
-    if tipo:
-        await log_activity(
-            db,
-            usuario_id=user.id,
-            tipo_actividad_id=tipo.id,
-            ip_origen=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-            detalle_accion={"resource_id": recurso.id, "titulo": recurso.titulo},
-        )
-    return await _resource_payload(db, recurso)
+    return await process_approve_resource(db, recurso, data.comentario if data else None, user, request)
 
 
 @router.patch("/{resource_id}/observe", response_model=RecursoRead)
@@ -510,19 +418,7 @@ async def observe_resource(
     recurso = await db.get(Recurso, resource_id)
     if not recurso:
         raise HTTPException(status_code=404, detail="Recurso no encontrado")
-    observed_id = await _state_id(db, "Observado")
-    previous_state = recurso.estado_id
-    recurso.estado_id = observed_id
-    db.add(RecursoEstadoHistorial(
-        recurso_id=recurso.id,
-        estado_anterior_id=previous_state,
-        estado_nuevo_id=observed_id,
-        comentario=data.comentario,
-        cambiado_por=user.id,
-    ))
-    await db.commit()
-    await db.refresh(recurso)
-    return await _resource_payload(db, recurso)
+    return await process_observe_resource(db, recurso, data.comentario, user)
 
 
 @router.patch("/{resource_id}", response_model=RecursoRead)
@@ -585,30 +481,4 @@ async def archive_resource(
     if not recurso:
         raise HTTPException(status_code=404, detail="Recurso no encontrado")
 
-    archived_id = await _state_id(db, "Archivado")
-    previous_state = recurso.estado_id
-    recurso.estado_id = archived_id
-    recurso.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-    db.add(
-        RecursoEstadoHistorial(
-            recurso_id=recurso.id,
-            estado_anterior_id=previous_state,
-            estado_nuevo_id=archived_id,
-            comentario=data.comentario if data else None,
-            cambiado_por=user.id,
-        )
-    )
-    await db.commit()
-    await db.refresh(recurso)
-
-    tipo = await _activity_type(db, "resource_archive")
-    if tipo:
-        await log_activity(
-            db,
-            usuario_id=user.id,
-            tipo_actividad_id=tipo.id,
-            ip_origen=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-            detalle_accion={"resource_id": recurso.id, "titulo": recurso.titulo},
-        )
-    return await _resource_payload(db, recurso)
+    return await process_archive_resource(db, recurso, data.comentario if data else None, user, request)

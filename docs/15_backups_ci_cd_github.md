@@ -58,7 +58,7 @@ gh secret set BACKUP_KNOWN_HOSTS < /tmp/fiq_known_hosts
 gh secret set BACKUP_SSH_KEY < ~/.ssh/fiq_actions_ed25519
 gh secret set BACKUP_ROOT --body "/var/backups/fiq"
 gh secret set BACKUP_RETENTION_DAYS --body "14"
-gh secret set POSTGRES_BACKUP_URL --body "postgresql://USER:PASSWORD@10.77.0.1:5432/fiq_db"
+gh secret set POSTGRES_BACKUP_URL --body "postgresql://USER:PASSWORD@10.77.0.2:5000/fiq_prod"
 gh secret set MONGO_BACKUP_URI --body "mongodb://USER:PASSWORD@10.77.0.1:27017/fiq_events?replicaSet=fiq-rs&authSource=admin"
 gh secret set MONGO_BACKUP_DB --body "fiq_events"
 

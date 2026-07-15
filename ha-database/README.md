@@ -10,14 +10,14 @@ Este paquete implementa la pieza que faltaba para alta disponibilidad real de da
 
 | Nodo | Rol | IP privada |
 | --- | --- | --- |
-| `oti` | PostgreSQL + Patroni + etcd + HAProxy | `100.79.244.99` |
-| `ubuntu` | PostgreSQL + Patroni + etcd + HAProxy | `100.97.171.89` |
-| `laptop` | PostgreSQL + Patroni + etcd + HAProxy | `100.126.122.28` |
+| `oti` | PostgreSQL + Patroni + etcd + HAProxy | `10.77.0.2` |
+| `ubuntu` | PostgreSQL + Patroni + etcd + HAProxy | `10.77.0.1` |
+| `laptop` | PostgreSQL + Patroni + etcd + HAProxy | `10.77.0.3` |
 
 La aplicacion debe escribir contra HAProxy, no contra un nodo PostgreSQL directo:
 
 ```text
-postgresql://postgres:<password>@100.79.244.99:5000/fiq_prod
+postgresql://postgres:<password>@10.77.0.2:5000/fiq_prod
 ```
 
 Puertos:
@@ -28,6 +28,10 @@ Puertos:
 - `8008`: API Patroni por nodo.
 - `5432`: PostgreSQL por nodo.
 - `2379-2380`: etcd.
+
+El compose usa `network_mode: host` para evitar problemas de NAT entre Patroni,
+etcd y la red privada WireGuard. Por eso estos puertos deben estar libres en
+cada nodo antes de levantar el cluster.
 
 ## Flujo de despliegue
 

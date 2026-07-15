@@ -52,3 +52,4 @@ external_resources/
 frontend/test-results/
 frontend/playwright-report/
 frontend/coverage/
+*.db

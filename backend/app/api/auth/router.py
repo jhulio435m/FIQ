@@ -4,16 +4,18 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 import uuid
 import httpx
+import urllib.parse
 from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.users import UserManager, get_jwt_strategy, get_user_manager
-from app.api.auth.schemas import LoginRequest, LoginResponse, ForgotPasswordRequest
+from app.api.auth.schemas import LoginRequest, LoginResponse, ForgotPasswordRequest, MicrosoftLoginRequest
 from app.models.user import User
 from app.core.security import hash_password
 from app.models.activity import TipoActividad
 from app.logs.crud import log_activity
+from app.core.cache import get_activity_type_id
 
 router = APIRouter()
 
@@ -46,19 +48,18 @@ async def login(
     strategy = get_jwt_strategy()
     access_token = await strategy.write_token(user)
 
-    tipo_res = await db.execute(select(TipoActividad).where(TipoActividad.nombre == "login"))
-    tipo = tipo_res.scalar_one_or_none()
-    if tipo:
+    tipo_id = await get_activity_type_id(db, "login")
+    if tipo_id:
         await log_activity(
             db,
             usuario_id=user.id,
-            tipo_actividad_id=tipo.id,
+            tipo_actividad_id=tipo_id,
             detalle_accion={"email": user.email},
         )
 
+    # TODO: Implement real refresh token flow
     return LoginResponse(
         access_token=access_token,
-        refresh_token=access_token,
         usuario={
             "id": str(user.id),
             "nombre": user.nombre,
@@ -89,7 +90,6 @@ async def get_microsoft_authorize_url(redirect_uri: str):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El inicio de sesión por Microsoft no está configurado.",
         )
-    import urllib.parse
     encoded_redirect = urllib.parse.quote(redirect_uri)
     url = (
         f"https://login.microsoftonline.com/{settings.MICROSOFT_TENANT_ID}/oauth2/v2.0/authorize"
@@ -101,10 +101,6 @@ async def get_microsoft_authorize_url(redirect_uri: str):
     )
     return {"url": url}
 
-
-class MicrosoftLoginRequest(BaseModel):
-    code: str
-    redirect_uri: str
 
 
 @router.post("/microsoft", response_model=LoginResponse)
@@ -187,28 +183,18 @@ async def microsoft_login(
         db.add(user)
         await db.commit()
         await db.refresh(user)
-
-        # Log activity "register"
-        tipo_res = await db.execute(select(TipoActividad).where(TipoActividad.nombre == "login"))
-        tipo = tipo_res.scalar_one_or_none()
-        if tipo:
-            await log_activity(
-                db,
-                usuario_id=user.id,
-                tipo_actividad_id=tipo.id,
-                detalle_accion={"email": user.email, "metodo": "microsoft_signup"},
-            )
+        metodo = "microsoft_signup"
     else:
-        # Log activity "login"
-        tipo_res = await db.execute(select(TipoActividad).where(TipoActividad.nombre == "login"))
-        tipo = tipo_res.scalar_one_or_none()
-        if tipo:
-            await log_activity(
-                db,
-                usuario_id=user.id,
-                tipo_actividad_id=tipo.id,
-                detalle_accion={"email": user.email, "metodo": "microsoft_login"},
-            )
+        metodo = "microsoft_login"
+
+    tipo_id = await get_activity_type_id(db, "login")
+    if tipo_id:
+        await log_activity(
+            db,
+            usuario_id=user.id,
+            tipo_actividad_id=tipo_id,
+            detalle_accion={"email": user.email, "metodo": metodo},
+        )
 
     if not user.is_effectively_active:
         raise HTTPException(
@@ -220,9 +206,9 @@ async def microsoft_login(
     strategy = get_jwt_strategy()
     jwt_token = await strategy.write_token(user)
 
+    # TODO: Implement real refresh token flow
     return LoginResponse(
         access_token=jwt_token,
-        refresh_token=jwt_token,
         usuario={
             "id": str(user.id),
             "nombre": user.nombre,

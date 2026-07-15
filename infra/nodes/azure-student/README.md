@@ -13,7 +13,7 @@ Nodo provisionado con beneficio estudiantil/cloud credits y llave local:
 - Arquitectura: `aarch64`
 - Virtualización: KVM
 - Rol: `fiq-node-2`
-- WireGuard objetivo: `10.77.0.2/24`
+- WireGuard objetivo: `10.77.0.1/24`
 
 ## Estado
 

@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.labs.models import ModuloLaboratorio, NivelDificultad
+from app.models.lab import ModuloLaboratorio, NivelDificultad
 from app.core.database import get_db
 from app.main import app
 from app.models.activity import TipoActividad
