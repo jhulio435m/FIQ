@@ -4,7 +4,7 @@ namespace: /service/
 restapi:
   listen: 0.0.0.0:8008
 
-etcd3:
+etcd:
   hosts: 127.0.0.1:2379
 
 bootstrap:

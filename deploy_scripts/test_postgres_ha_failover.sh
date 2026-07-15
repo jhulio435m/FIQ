@@ -2,11 +2,11 @@
 set -euo pipefail
 
 NODE1_HOST="${NODE1_HOST:-oti@100.79.244.99}"
-NODE1_IP="${NODE1_IP:-100.79.244.99}"
+NODE1_IP="${NODE1_IP:-10.77.0.2}"
 NODE2_HOST="${NODE2_HOST:-ubuntu@147.224.242.204}"
-NODE2_IP="${NODE2_IP:-100.97.171.89}"
+NODE2_IP="${NODE2_IP:-10.77.0.1}"
 NODE2_SSH_KEY="${NODE2_SSH_KEY:-/home/blink/downloads/ssh-key-2026-07-01.key}"
-NODE3_IP="${NODE3_IP:-100.126.122.28}"
+NODE3_IP="${NODE3_IP:-10.77.0.3}"
 POSTGRES_SUPERUSER_PASSWORD="${POSTGRES_SUPERUSER_PASSWORD:?POSTGRES_SUPERUSER_PASSWORD is required}"
 PGDATABASE="${PGDATABASE:-postgres}"
 PGUSER="${PGUSER:-postgres}"
@@ -26,7 +26,7 @@ patroni_role() {
 
 leader_ip() {
   for ip in "${NODE1_IP}" "${NODE2_IP}" "${NODE3_IP}"; do
-    if [[ "$(patroni_role "${ip}" 2>/dev/null || true)" == "master" ]]; then
+    if [[ "$(patroni_role "${ip}" 2>/dev/null || true)" =~ ^(master|primary)$ ]]; then
       echo "${ip}"
       return 0
     fi
@@ -36,7 +36,7 @@ leader_ip() {
 
 query_via_haproxy() {
   PGPASSWORD="${POSTGRES_SUPERUSER_PASSWORD}" psql \
-    "postgresql://${PGUSER}@${NODE1_IP}:5000/${PGDATABASE}" \
+    "postgresql://${PGUSER}@${NODE1_IP}:5000/${PGDATABASE}?connect_timeout=8" \
     -Atc "select inet_server_addr(), pg_is_in_recovery();"
 }
 

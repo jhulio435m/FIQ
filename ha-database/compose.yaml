@@ -2,6 +2,7 @@ services:
   etcd:
     image: quay.io/coreos/etcd:v3.5.12
     restart: unless-stopped
+    network_mode: host
     command:
       - /usr/local/bin/etcd
     environment:
@@ -14,10 +15,7 @@ services:
       ETCD_INITIAL_CLUSTER_TOKEN: ${ETCD_INITIAL_CLUSTER_TOKEN:-fiq-etcd-cluster}
       ETCD_INITIAL_CLUSTER: ${ETCD_INITIAL_CLUSTER}
       ETCD_INITIAL_CLUSTER_STATE: ${ETCD_INITIAL_CLUSTER_STATE:-new}
-      ETCD_ENABLE_V2: "false"
-    ports:
-      - "2379:2379"
-      - "2380:2380"
+      ETCD_ENABLE_V2: "true"
     volumes:
       - etcd_data:/etcd-data
 
@@ -26,11 +24,12 @@ services:
       context: .
       dockerfile: Dockerfile.patroni
     restart: unless-stopped
+    network_mode: host
     environment:
       PATRONI_NAME: ${PATRONI_NAME}
       PATRONI_SCOPE: ${PATRONI_SCOPE:-fiq-postgres}
       PATRONI_NAMESPACE: /service/
-      PATRONI_ETCD3_HOSTS: ${PATRONI_ETCD3_HOSTS}
+      PATRONI_ETCD_HOSTS: ${PATRONI_ETCD_HOSTS}
       PATRONI_RESTAPI_LISTEN: 0.0.0.0:8008
       PATRONI_RESTAPI_CONNECT_ADDRESS: ${NODE_IP}:8008
       PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
@@ -41,9 +40,6 @@ services:
       PATRONI_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD}
       PATRONI_REWIND_USERNAME: rewind_user
       PATRONI_REWIND_PASSWORD: ${POSTGRES_REWIND_PASSWORD}
-    ports:
-      - "5432:5432"
-      - "8008:8008"
     volumes:
       - patroni_data:/home/postgres/pgdata
       - ./patroni.yml:/patroni.yml:ro
@@ -53,15 +49,12 @@ services:
   haproxy:
     image: haproxy:2.9-alpine
     restart: unless-stopped
+    network_mode: host
     environment:
       NODE1_IP: ${NODE1_IP}
       NODE2_IP: ${NODE2_IP}
       NODE3_IP: ${NODE3_IP}
     entrypoint: ["/usr/local/bin/render-haproxy.sh"]
-    ports:
-      - "5000:5000"
-      - "5001:5001"
-      - "7000:7000"
     volumes:
       - ./haproxy.cfg.tpl:/usr/local/etc/haproxy/haproxy.cfg.tpl:ro
       - ./render-haproxy.sh:/usr/local/bin/render-haproxy.sh:ro
