@@ -1,5 +1,13 @@
 import uuid
+import os
 from collections.abc import AsyncGenerator
+
+os.environ["SECRET_KEY"] = "fiq-test-secret-key-with-at-least-32-bytes"
+os.environ["SESSION_COOKIE_SECURE"] = "false"
+os.environ["ENVIRONMENT"] = "test"
+os.environ["REDIS_URL"] = ""
+os.environ["MONGO_ENABLED"] = "false"
+os.environ["CLAMAV_ENABLED"] = "false"
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -9,14 +17,18 @@ from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.lab import ModuloLaboratorio, NivelDificultad
-from app.core.database import get_db
+from app.core.database import get_db, get_read_db
 from app.main import app
 from app.models.activity import TipoActividad
 from app.models.resource import Curso, EstadoRecurso, Recurso, TipoRecurso
 from app.models.user import Rol, User
+from app.api.personal_library.models import BibliotecaUsuarioRecurso, ListaBiblioteca, ListaBibliotecaRecurso
+from app.api.bibliography.models import ArchivoBibliografico, EdicionBibliografica, EdicionISBN, ObraBibliografica
+from app.api.auth.router import auth_rate_limiter, session_rate_limiter
+from app.api.external_catalog.router import external_rate_limiter
 
 
-TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 test_engine = create_async_engine(TEST_DATABASE_URL, future=True)
 TestingSessionLocal = sessionmaker(
@@ -26,6 +38,9 @@ TestingSessionLocal = sessionmaker(
 
 @pytest_asyncio.fixture(autouse=True)
 async def database() -> AsyncGenerator[None, None]:
+    await auth_rate_limiter.clear()
+    await session_rate_limiter.clear()
+    await external_rate_limiter.clear()
     async with test_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.drop_all)
         await conn.run_sync(SQLModel.metadata.create_all)
@@ -47,6 +62,7 @@ async def client(db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield db
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_read_db] = override_get_db
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as async_client:
         yield async_client
@@ -70,6 +86,8 @@ async def seed_reference_data(db: AsyncSession) -> dict[str, uuid.UUID]:
             EstadoRecurso(id=5, nombre="Archivado"),
             Curso(id=1, nombre="Química General", codigo="QUI101"),
             TipoActividad(id=1, nombre="login"),
+            TipoActividad(id=2, nombre="view"),
+            TipoActividad(id=3, nombre="download"),
             TipoActividad(id=4, nombre="upload"),
             TipoActividad(id=8, nombre="resource_archive"),
             TipoActividad(id=9, nombre="upload_rejected"),

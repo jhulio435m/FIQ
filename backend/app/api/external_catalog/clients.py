@@ -56,6 +56,21 @@ def _open_library_cover(isbn: str | None) -> str | None:
     return f"https://covers.openlibrary.org/b/isbn/{quote(isbn)}-M.jpg"
 
 
+def _open_library_cover_from_doc(doc: JsonDict, isbn: str | None) -> str | None:
+    cover_id = doc.get("cover_i")
+    if isinstance(cover_id, int) and cover_id > 0:
+        return f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg?default=false"
+    return _open_library_cover(isbn)
+
+
+def _string_list(value: Any, *, limit: int = 8) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [str(item) for item in value if item][:limit]
+    return []
+
+
 def _crossref_date(message: JsonDict) -> str | None:
     date_parts = message.get("published-print") or message.get("published-online") or message.get("issued")
     parts = date_parts.get("date-parts") if isinstance(date_parts, dict) else None
@@ -104,7 +119,8 @@ def normalize_open_library(doc: JsonDict) -> ExternalWork | None:
         publisher=_first(doc.get("publisher")),
         published_year=doc.get("first_publish_year") if isinstance(doc.get("first_publish_year"), int) else None,
         isbn=isbn,
-        cover_url=_open_library_cover(isbn),
+        language=_first(doc.get("language")),
+        cover_url=_open_library_cover_from_doc(doc, isbn),
         external_url=f"https://openlibrary.org{key}",
         subjects=[str(subject) for subject in doc.get("subject") or [] if subject][:8],
     )
@@ -130,8 +146,10 @@ def normalize_internet_archive(doc: JsonDict) -> ExternalWork | None:
         authors=authors,
         publisher=_first(doc.get("publisher")),
         published_year=_year_from_date(doc.get("year") or doc.get("date")),
+        language=_first(doc.get("language")),
+        cover_url=f"https://archive.org/services/img/{quote(identifier, safe='')}",
         external_url=f"https://archive.org/details/{identifier}",
-        subjects=[str(subject) for subject in doc.get("subject") or [] if subject][:8],
+        subjects=_string_list(doc.get("subject")),
     )
 
 
@@ -151,6 +169,7 @@ def normalize_crossref(message: JsonDict) -> ExternalWork | None:
         published_year=_year_from_date(published_date),
         published_date=published_date,
         doi=doi,
+        language=message.get("language") if isinstance(message.get("language"), str) else None,
         external_url=message.get("URL") if isinstance(message.get("URL"), str) else f"https://doi.org/{doi}",
         license=_first([
             item.get("URL")
@@ -178,6 +197,7 @@ def normalize_openalex(item: JsonDict) -> ExternalWork | None:
         published_year=item.get("publication_year") if isinstance(item.get("publication_year"), int) else None,
         published_date=item.get("publication_date") if isinstance(item.get("publication_date"), str) else None,
         doi=doi.removeprefix("https://doi.org/") if isinstance(doi, str) else None,
+        language=item.get("language") if isinstance(item.get("language"), str) else None,
         external_url=external_id,
         open_access_url=(
             item.get("open_access", {}).get("oa_url")
@@ -219,7 +239,10 @@ async def search_open_library(
     limit: int,
     fetcher: FetchJson = fetch_json,
 ) -> list[ExternalWork]:
-    params: dict[str, Any] = {"limit": limit}
+    params: dict[str, Any] = {
+        "limit": limit,
+        "fields": "key,title,author_name,publisher,first_publish_year,isbn,language,subject,cover_i",
+    }
     if isbn:
         params["isbn"] = isbn
     elif query:
@@ -247,7 +270,7 @@ async def search_internet_archive(
         "https://archive.org/advancedsearch.php",
         {
             "q": f'title:({query}) AND mediatype:(texts)',
-            "fl[]": ["identifier", "title", "creator", "publisher", "year", "date", "subject"],
+            "fl[]": ["identifier", "title", "creator", "publisher", "year", "date", "subject", "language"],
             "rows": limit,
             "output": "json",
         },

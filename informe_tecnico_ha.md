@@ -1,13 +1,13 @@
-# UNIVERSIDAD NACIONAL DEL CENTRO DEL PERÚ
-## FACULTAD DE INGENIERÍA DE SISTEMAS
+# UNIVERSIDAD NACIONAL DEL CENTRO DEL PERU
+## FACULTAD DE INGENIERIA QUIMICA
 
 ---
 
-### INFORME TÉCNICO
-**"Diseño de Arquitectura de Alta Disponibilidad de 3 Nodos mediante SQL Server Always On y Windows Server Failover Clustering (WSFC)"**
+### INFORME TECNICO
+**"Arquitectura real de alta disponibilidad para la Plataforma Digital FIQ con Kubernetes, PostgreSQL Patroni, HAProxy y sharding"**
 
 #### INTEGRANTES
-* Morán de la Cruz Jhulio Alessandro
+* Moran de la Cruz Jhulio Alessandro
 * Palomino Chacon Hernando
 * Pando Vargas Josue Samuel
 * Porras Falcon Alexander Neil
@@ -16,145 +16,233 @@
 #### DOCENTE
 * Mercado Rivas Richard Yuri
 
-**HUANCAYO — PERÚ**  
+**HUANCAYO - PERU**
 **2026**
 
 ---
 
-## 1. Introducción
+## 1. Introduccion
 
-El presente informe técnico describe el diseño y la implementación de una arquitectura de alta disponibilidad (HA) de **3 nodos** para la **Plataforma de Biblioteca Digital de la Facultad de Ingeniería Química (FIQ-UNCP)**. La solución interconecta tres servidores bajo el sistema operativo **Windows Server 2022 Datacenter**: un servidor físico local (**PC Local**) y dos servidores virtuales remotos en la nube de Azure (**VPS 2** y **VPS 3**).
+El presente informe tecnico describe la arquitectura real implementada para la Plataforma Digital de la Facultad de Ingenieria Quimica (FIQ-UNCP). La solucion no utiliza SQL Server Always On ni Windows Server Failover Clustering. La implementacion operativa se basa en Linux, Kubernetes k3s, PostgreSQL 17, Patroni, HAProxy, Redis, MinIO, Prometheus, Grafana, Cloudflare Tunnel y un watcher externo con bot de Telegram.
 
-La base de datos relacional se gestiona mediante **SQL Server 2022 Developer Edition**, aprovechando la tecnología nativa de **Always On Availability Groups** implementada sobre un clúster de conmutación por error de Windows (**Windows Server Failover Clustering - WSFC**). 
+La plataforma fue desplegada en un cluster Kubernetes de cinco nodos de quorum conectados por Tailscale. El objetivo es mantener disponibilidad de aplicacion, base de datos y monitoreo externo aun cuando uno de los nodos falle o se degrade. La aplicacion web entra por Cloudflare Tunnel hacia servicios internos de Kubernetes; el backend FastAPI opera con PostgreSQL HA mediante HAProxy, y la carga masiva de recursos academicos se distribuye mediante sharding real en dos shards PostgreSQL.
 
-Los tres nodos están integrados en una red privada virtual (VPN) segura de **WireGuard** y unidos a un dominio de **Active Directory (AD DS)**. Toda la redirección del tráfico transaccional CRUD de los usuarios y de las herramientas de inteligencia de negocios (**PowerBI**) se realiza mediante el **Availability Group Listener**, garantizando que el servicio continúe operando de manera transparente e ininterrumpida frente a fallas en cualquiera de las réplicas.
-
----
+Este informe actualiza la documentacion a lo que existe realmente en produccion al 22 de julio de 2026.
 
 ## 2. Objetivos
 
-### Objetivo General
-Implementar una arquitectura de alta disponibilidad activa-pasiva de 3 nodos (1 local y 2 en Azure) utilizando WSFC y SQL Server Always On, asegurando failover automático y balanceo de lecturas sin pérdida de datos.
+### 2.1. Objetivo general
 
-### Objetivos Específicos
-* Configurar la PC Local como nodo primario activo principal (`SQL-PROD-01`) para las operaciones de escritura/lectura del CRUD de la Biblioteca.
-* Configurar el VPS 2 Azure como nodo secundario pasivo síncrono (`SQL-HA-02`) para soporte inmediato de failover automático con pérdida de datos cero (RPO = 0).
-* Configurar el VPS 3 Azure como nodo secundario de recuperación ante desastres (`SQL-DR-03`) en modo de confirmación síncrona o asíncrona, actuando como réplica legible dedicada para la ingesta de datos de **PowerBI**.
-* Establecer el quórum del clúster mediante voto mayoritario nativo de 3 nodos (sin necesidad de testigos de disco o de recurso compartido externos).
-* Desactivar el caché de identidades (`IDENTITY_CACHE = OFF`) en las instancias SQL Server para prevenir saltos de secuencia en las columnas autoincrementales ante conmutaciones de nodos.
-* Utilizar el **Availability Group Listener** (`AG-LISTENER-FIQ`) para enrutar automáticamente las conexiones del backend CRUD al nodo primario activo.
+Implementar una arquitectura de alta disponibilidad basada en Kubernetes y PostgreSQL HA que permita continuidad operativa de la Plataforma Digital FIQ, con failover de base de datos, entrada publica controlada, monitoreo externo y distribucion de carga mediante sharding.
 
----
+### 2.2. Objetivos especificos
 
-## 3. Arquitectura de Red e Infraestructura de 3 Nodos
+- Operar la plataforma sobre Kubernetes k3s en cinco nodos `server/control-plane/etcd`.
+- Mantener PostgreSQL en alta disponibilidad con Patroni y HAProxy.
+- Usar HAProxy como listener estable para escritura y lectura SQL.
+- Separar carga de recursos academicos mediante shards PostgreSQL.
+- Ejecutar backend, frontend, Redis, MinIO, Cloudflare Tunnel y shards como recursos Kubernetes.
+- Mantener un watcher externo fuera del quorum para detectar fallas desde otra maquina.
+- Usar el bot principal de Telegram por systemd en `ocri`, evitando consumidores duplicados del mismo token.
+- Mantener secretos fuera de Git mediante Kubernetes Secrets y archivos `.env` no versionados.
 
-La topología distribuye los roles y la replicación para equilibrar la disponibilidad local y la redundancia en la nube:
+## 3. Topologia real implementada
 
-```
-                            ┌──────────────────────────────┐
-                            │    Clientes Web / PowerBI    │
-                            └──────────────┬───────────────┘
-                                           │
-                               (Túnel Seguro Cloudflare)
-                                           │
-                                           ▼
-                               [Backend / Express CRUD]
-                                           │
-                             (Conecta a: AG-LISTENER-FIQ)
-                                           │
-            ┌──────────────────────────────┼──────────────────────────────┐
-            ▼                              ▼                              ▼
-   [PC Local (WS 2022)]           [VPS 2 Azure (WS 2022)]        [VPS 3 Azure (WS 2022)]
-   - Host: SQL-PROD-01            - Host: SQL-HA-02              - Host: SQL-DR-03
-   - PRIMARY (R/W)                - SECONDARY (Replica HA)       - SECONDARY (Replica Read-Only)
-   - Replicación Síncrona         - Replicación Síncrona         - Replicación Síncrona
-   - 1 Voto                       - 1 Voto                       - 1 Voto
-```
+El cluster de produccion se compone de cinco nodos de quorum y un watcher externo:
 
-### 3.1. Gestión de Quórum en Clúster de 3 Nodos
-Al contar con **3 nodos activos** en el clúster WSFC, el sistema dispone de un número impar de votos nativos (**3 votos en total**):
-* **Quórum mayoritario:** Se requiere una mayoría simple de votos activos para mantener el clúster en línea (mínimo **2 votos**).
-* **Escenario de Falla 1 (Caída de PC Local):** Los dos nodos en Azure (`SQL-HA-02` y `SQL-DR-03`) permanecen activos, sumando 2 votos. El clúster mantiene el quórum y promueve automáticamente al `SQL-HA-02` a rol PRIMARY sin caída del servicio.
-* **Escenario de Falla 2 (Caída de un VPS):** La PC Local y el VPS restante suman 2 votos, manteniendo el clúster activo de forma transparente.
+| Nodo | Host / acceso | IP Tailscale | Rol real |
+| :--- | :--- | :--- | :--- |
+| `abc` | `ubuntu@147.224.242.204` | `100.97.171.89` | k3s server, etcd, Patroni, HAProxy, backend, frontend, Cloudflare Tunnel, shard |
+| `server` | `ubuntu@147.15.114.98` | `100.87.33.2` | k3s server, etcd, Patroni, HAProxy, backend, frontend, Cloudflare Tunnel, shard |
+| `arch` | equipo local | `100.110.204.72` | k3s server, etcd, Patroni, HAProxy |
+| `debian` | VPS Debian | `100.94.200.89` | k3s server, etcd, Patroni, HAProxy |
+| `parrot` | `oti@100.79.244.99` | `100.79.244.99` | k3s server, etcd, Patroni, HAProxy |
+| `ocri` | `jhulio@167.234.255.122` | `100.122.189.103` | watcher externo y bot principal de Telegram |
 
-Esta topología es sumamente robusta ya que no requiere configurar recursos compartidos de red adicionales (*File Share Witness*) o discos de quórum en la nube para arbitraje de votos.
+`ocri` no participa en quorum, no aloja datos y no ejecuta control-plane. Su funcion es observar la disponibilidad desde fuera y mantener el bot principal `fiq-telegram-bot.service`.
 
-### 3.2. Seguridad y Cuentas de Servicio Administradas por el Grupo (gMSA)
-Para la autenticación mutua de los Endpoints de replicación de base de datos (puerto `5022`) sin requerir la gestión y rotación manual de certificados digitales en cada nodo, se implementa una cuenta de servicio administrada por el grupo (**gMSA** - *Group Managed Service Account*) en Active Directory:
-* Se registra la cuenta de servicio `fiq\gmsa_sql$` en el dominio de Active Directory.
-* Se configuran las instancias de SQL Server de los 3 nodos para que inicien bajo la cuenta `fiq\gmsa_sql$`.
-* Los endpoints se configuran para autenticar mediante Kerberos utilizando los Service Principal Names (SPN) asociados a la cuenta de servicio de forma 100% nativa.
+## 4. Arquitectura general
 
----
+```mermaid
+flowchart TD
+    U[Usuarios FIQ] --> CF[Cloudflare Tunnel]
+    CF --> FE[frontend Service - Kubernetes]
+    FE --> BE[backend Service - FastAPI]
 
-## 4. Estructura de la Base de Datos Relacional
+    BE --> HAW[HAProxy :5000 escritura]
+    BE --> HAR[HAProxy :5001 lectura]
+    HAW --> PGL[(PostgreSQL lider Patroni)]
+    HAR --> PGR[(Replicas PostgreSQL Patroni)]
 
-La base de datos `fiq_prod` se almacena en el grupo de disponibilidad y contiene las siguientes relaciones relacionales:
-* **Entidades:** `recursos` (PDFs subidos), `cursos` (cátedras académicas), `user` (perfiles de alumnos/docentes) y `roles` (permisos de seguridad).
-* **Auditoría:** `registro_actividades` (logs de descargas y visualizaciones leídos periódicamente por PowerBI).
+    BE --> R0[(resource-shard-0)]
+    BE --> R1[(resource-shard-1)]
+    BE --> Redis[(Redis)]
+    BE --> MinIO[(MinIO)]
 
-### 4.1. Prerrequisitos de Base de Datos y Modelo de Recuperación Completo
-Antes de agregar la base de datos `fiq_prod` al Availability Group, es requisito indispensable preparar la base de datos estableciendo su modelo de recuperación en **completo** (Full Recovery Model) y ejecutando un backup completo del registro para iniciar la cadena de logs:
-```sql
--- 1. Establecer modelo de recuperación FULL
-ALTER DATABASE [fiq_prod] SET RECOVERY FULL;
+    K3S[k3s embedded etcd - 5 nodos] --> Patroni[Patroni Kubernetes DCS]
+    Patroni --> PGL
+    Patroni --> PGR
 
--- 2. Ejecutar backup del log para iniciar cadena de transacciones
-BACKUP DATABASE [fiq_prod] TO DISK = 'C:\Backup\fiq_prod_init.bak';
+    O[ocri watcher externo] --> CF
+    O --> HAW
+    O --> HAR
+    O --> T[Telegram bot systemd]
 ```
 
-Para evitar que la secuencia numérica de los registros de la biblioteca salte de ID sumando +1000 tras un reinicio de servicio o failover forzado de cualquiera de las réplicas, se desactiva el caché de identidad en las tres instancias de SQL Server:
-```sql
-ALTER DATABASE SCOPED CONFIGURATION SET IDENTITY_CACHE = OFF;
-```
+## 5. Kubernetes como runtime de produccion
 
----
+La produccion se ejecuta sobre k3s HA. Docker Compose quedo apagado en los VPS Ubuntu y se conserva solo como rollback manual o laboratorio.
 
-## 5. Funcionamiento del Availability Group Listener y Enrutamiento de Lectura
+Componentes desplegados en el namespace `fiq-prod`:
 
-El **Availability Group Listener** (`AG-LISTENER-FIQ.fiq.local`) se encarga de la conmutación de red:
-* **Escrituras (CRUD):** El backend se conecta al Listener. La conexión se redirige automáticamente al host que posea el rol PRIMARY (por defecto, el PC Local `SQL-PROD-01`).
-* **Lecturas de Reportería (PowerBI):** PowerBI se conecta al Listener incluyendo la propiedad de intención de lectura en su cadena de conexión (`ApplicationIntent=ReadOnly`). El Listener detecta la propiedad y desvía la carga de consulta hacia el nodo pasivo legible `SQL-DR-03` (VPS 3), liberando de carga computacional al nodo de producción principal.
+- `backend`: 2 replicas, una en `abc` y otra en `server`.
+- `frontend`: 3 replicas distribuidas en nodos de aplicacion.
+- `cloudflare-tunnel`: 2 replicas, una en `abc` y otra en `server`.
+- `prometheus`, `kube-state-metrics`, `node-exporter` y `grafana`: observabilidad del cluster, nodos, pods y Patroni.
+- `redis`: servicio auxiliar para cache/colas.
+- `minio`: almacenamiento S3 compatible.
+- `resource-shard`: StatefulSet de 2 shards PostgreSQL.
+- `patroni`: DaemonSet hostNetwork en los cinco nodos de datos.
+- `postgres-haproxy`: DaemonSet hostNetwork en los cinco nodos.
 
-### 5.1. Configuración de la Lista de Enrutamiento de Solo Lectura (Read-Only Routing List)
-Para que SQL Server pueda derivar la intención de lectura al nodo VPS 3 de forma automatizada, se debe programar la lista de enrutamiento en cada una de las réplicas. El siguiente script SQL define las prioridades de desvío cuando `SQL-PROD-01` actúa como réplica primaria:
-```sql
--- Configurar la URL de enrutamiento en cada réplica
-ALTER AVAILABILITY GROUP [AG_FIQ]
-MODIFY REPLICA ON N'SQL-PROD-01' WITH (PRIMARY_ROLE (READ_ONLY_ROUTING_LIST = (N'SQL-DR-03', N'SQL-HA-02')));
+Estado operativo verificado:
 
-ALTER AVAILABILITY GROUP [AG_FIQ]
-MODIFY REPLICA ON N'SQL-HA-02' WITH (PRIMARY_ROLE (READ_ONLY_ROUTING_LIST = (N'SQL-DR-03', N'SQL-PROD-01')));
+- La aplicacion responde por Cloudflare Tunnel con `HTTP 200`.
+- `/api/health` responde `{"status":"ok","version":"1.0.0"}`.
+- Los pods principales de backend, frontend, Redis, MinIO, Cloudflare Tunnel, HAProxy y shards estan en ejecucion.
+- Los jobs de migracion y seed terminaron como `Completed`.
 
--- Definir las URLs legibles TCP para enrutamiento
-ALTER AVAILABILITY GROUP [AG_FIQ]
-MODIFY REPLICA ON N'SQL-PROD-01' WITH (SECONDARY_ROLE (READ_ONLY_ROUTING_URL = N'TCP://SQL-PROD-01.fiq.local:1433'));
+## 6. PostgreSQL HA con Patroni y HAProxy
 
-ALTER AVAILABILITY GROUP [AG_FIQ]
-MODIFY REPLICA ON N'SQL-DR-03' WITH (SECONDARY_ROLE (READ_ONLY_ROUTING_URL = N'TCP://SQL-DR-03.fiq.local:1433'));
-```
+PostgreSQL es la base transaccional principal. Patroni administra liderazgo, replicas y failover. En esta implementacion Patroni usa Kubernetes DCS sobre el plano de control k3s; no se ejecuta un `postgres-etcd` separado.
 
----
+HAProxy cumple el rol de listener estable:
 
-## 6. Procedimientos de Failover y Failback
+- Puerto `5000`: escrituras hacia el lider PostgreSQL.
+- Puerto `5001`: lecturas hacia replicas disponibles.
+- Puerto `7000`: estadisticas de HAProxy.
 
-### 6.1. Failover Automático
-1. Si la PC Local `SQL-PROD-01` se desconecta o falla, el clúster WSFC detecta la pérdida de latidos de red.
-2. Al mantener la mayoría de votos en Azure (2 de 3 votos), el clúster ejecuta un **failover automático**.
-3. La instancia SQL Server de `SQL-HA-02` (VPS 2) es promovida inmediatamente a **PRIMARY** activo.
-4. El Listener actualiza la asignación IP y enruta todo el tráfico de escrituras del CRUD hacia el VPS 2 de forma automática.
+Estado verificado de Patroni:
 
-### 6.2. Failback Automático
-1. Cuando la PC Local `SQL-PROD-01` se enciende y reconecta a la VPN WireGuard, WSFC la reincorpora en rol secundario.
-2. Always On sincroniza automáticamente el registro de transacciones acumulado en la réplica local desde el VPS 2.
-3. Al alcanzar el estado `SYNCHRONIZED`, el clúster de conmutación por error realiza un failback planificado.
-4. `SQL-PROD-01` recupera el rol de **PRIMARY** y el Listener desvía la conexión CRUD principal de vuelta al PC Local.
-5. El VPS 2 retorna a su estado secundario pasivo síncrono.
+| Miembro | Host | Rol | Estado | Lag |
+| :--- | :--- | :--- | :--- | :--- |
+| `patroni-k2rfs` | `100.97.171.89` | Leader | running | - |
+| `patroni-8htb2` | `100.110.204.72` | Replica | streaming | 0 |
+| `patroni-drk6x` | `100.79.244.99` | Replica | streaming | 0 |
+| `patroni-mrqg7` | `100.87.33.2` | Replica | streaming | 0 |
+| `patroni-ppgd4` | `100.94.200.89` | Replica | streaming | 0 |
 
----
+Esto demuestra que la capa de datos conserva un lider y cuatro replicas en streaming. Si el lider deja de responder, Patroni puede promover una replica y HAProxy mantiene el punto de conexion estable para el backend.
 
-## 7. Conclusión
+## 7. Sharding real para recursos academicos
 
-El diseño de un clúster de alta disponibilidad de **3 nodos** (PC Local, VPS 2 y VPS 3) con SQL Server Always On y WSFC es la arquitectura recomendada para aplicaciones críticas como la **Biblioteca Digital FIQ-UNCP**. 
+Ademas de la alta disponibilidad de PostgreSQL principal, se implemento sharding real para distribuir carga de recursos academicos. El runtime Kubernetes usa un `StatefulSet` llamado `resource-shard` con dos replicas:
 
-El uso de un clúster de 3 nodos elimina dependencias de recursos testigos externos de quórum. Adicionalmente, la implementación del **Availability Group Listener** y la configuración de intención de lectura permiten separar las operaciones CRUD del tráfico analítico de **PowerBI**, logrando una arquitectura óptima, redundante y de rendimiento superior.
+- `resource-shard-0` en `server`.
+- `resource-shard-1` en `abc`.
+
+La distribucion se realiza de forma deterministica por `curso_id`, de manera que la carga de recursos no se concentra en una sola base. Para validar el comportamiento se poblo la plataforma con 50 000 registros de prueba:
+
+- `resource-shard-0`: 25 000 recursos.
+- `resource-shard-1`: 25 000 recursos.
+
+Este sharding no reemplaza a PostgreSQL HA transaccional; lo complementa para carga masiva y consultas de biblioteca/recursos.
+
+## 8. Entrada publica con Cloudflare Tunnel
+
+La entrada publica actual usa Cloudflare Tunnel desde Kubernetes. Se ejecuto con `--protocol http2` para evitar fallos de QUIC/UDP 7844 en los VPS.
+
+URLs publicas operativas al momento de la verificacion:
+
+- `https://entirely-develop-patent-cordless.trycloudflare.com`
+- `https://inquire-floating-mind-employees.trycloudflare.com`
+
+Ambas responden el frontend y `/api/health`. Sin embargo, estas URLs son quick tunnels de Cloudflare y no tienen garantia de permanencia. Para produccion formal se debe crear un named tunnel y asociarlo a un subdominio fijo, por ejemplo `fiq.<dominio-institucional>`.
+
+## 9. Observabilidad con Prometheus y Grafana
+
+Se agrego observabilidad dentro de Kubernetes con Prometheus y Grafana. Prometheus recolecta metricas de Kubernetes, `kube-state-metrics`, `node-exporter` y Patroni. Grafana queda aprovisionado con Prometheus como datasource y un dashboard inicial `FIQ HA Overview`.
+
+Grafana se expone temporalmente por Cloudflare Tunnel en:
+
+- `https://opinion-feeding-bali-father.trycloudflare.com`
+
+Como ocurre con las URLs principales de la aplicacion, este enlace es un quick tunnel y debe reemplazarse por un named tunnel con subdominio fijo para produccion formal.
+
+## 10. Watcher externo y bot de Telegram
+
+El host `ocri` opera como watcher externo. Se encontro que existia un servicio systemd antiguo `fiq-telegram-bot.service` y un contenedor Docker intentando consumir el mismo bot de Telegram, lo que podia causar `409 Conflict` por multiples consumidores del mismo token.
+
+La arquitectura real quedo definida asi:
+
+- Se conserva `fiq-telegram-bot.service` por systemd porque contiene la logica principal del bot.
+- Se apaga el contenedor Docker duplicado del bot/watcher.
+- `fiq-watcher.timer` ejecuta los chequeos periodicos.
+- El watcher monitorea Cloudflare, API, Grafana, k3s API, HAProxy y endpoints Patroni por Tailscale.
+
+Estado verificado:
+
+- `fiq-telegram-bot.service`: activo.
+- `fiq-watcher.timer`: activo.
+- Ultima ejecucion de `fiq-watcher.service`: exitosa.
+- No quedan contenedores Docker duplicados del bot en `ocri`.
+
+## 11. Seguridad y gestion de secretos
+
+Medidas aplicadas:
+
+- Comunicacion privada entre nodos por Tailscale.
+- PostgreSQL, Patroni y HAProxy expuestos solo sobre red privada.
+- Entrada publica controlada por Cloudflare Tunnel.
+- Secretos reales fuera de Git.
+- Llaves SSH ignoradas mediante `.gitignore`.
+- Kubernetes Secrets para credenciales de aplicacion, PostgreSQL, shards, MinIO y API keys.
+- Separacion de `ocri` como watcher sin datos ni voto de quorum.
+
+## 12. Estado actual y observaciones
+
+Estado real verificado el 22 de julio de 2026:
+
+- La aplicacion publica responde por Cloudflare Tunnel.
+- Backend y frontend estan activos en Kubernetes.
+- PostgreSQL HA esta sano con lider y cuatro replicas en streaming.
+- Los shards estan activos y poblados con datos de prueba.
+- Los Compose antiguos de `abc` y `server` fueron apagados.
+- `ocri` mantiene el bot principal por systemd y el watcher externo.
+
+Observacion operativa importante:
+
+- El nodo `parrot`/`oti` presento degradacion temporal como nodo Kubernetes (`NotReady`) por timeouts del API/etcd local. Se reinicio el host y `k3s` volvio a `active/running`; tras una fluctuacion inicial, la ultima verificacion mostro nuevamente los cinco nodos `Ready`.
+- Durante la degradacion, la capa PostgreSQL Patroni siguio reportando la replica de `parrot` en `streaming`, y la plataforma publica siguio respondiendo por los nodos `abc` y `server`.
+
+## 13. Failover y recuperacion
+
+### 13.1. Falla del lider PostgreSQL
+
+1. Patroni detecta que el lider no responde.
+2. Kubernetes DCS mantiene el estado del cluster.
+3. Patroni promueve una replica disponible.
+4. HAProxy redirige el puerto `5000` hacia el nuevo lider.
+5. El backend puede requerir reconexion breve, pero no cambia su cadena de conexion.
+
+### 13.2. Falla de un nodo de aplicacion
+
+Si cae `abc` o `server`, Kubernetes mantiene replicas del frontend/backend/tunnel en el otro nodo de aplicacion. El servicio puede degradarse, pero no depende de un unico contenedor Docker.
+
+### 13.3. Falla del watcher
+
+Si cae `ocri`, la plataforma sigue funcionando. Lo que se pierde temporalmente es la observacion externa y las alertas por Telegram.
+
+## 14. Pendientes para produccion formal
+
+- Crear un Cloudflare named tunnel y asociarlo a un subdominio fijo.
+- Reemplazar las URLs `trycloudflare.com` por el dominio definitivo.
+- Mantener observacion de `parrot`; si vuelve a `NotReady`, removerlo del quorum k3s y reingresarlo limpio.
+- Automatizar backups y pruebas de restauracion.
+- Definir retencion y rotacion de secretos.
+
+## 15. Conclusion
+
+La Plataforma Digital FIQ cuenta con una arquitectura real de alta disponibilidad basada en Kubernetes k3s, PostgreSQL Patroni, HAProxy y sharding de recursos. La solucion implementada cumple el objetivo practico de continuidad operativa: entrada publica por Cloudflare, replicas de aplicacion, base de datos con lider y replicas en streaming, listener estable para SQL y watcher externo con Telegram.
+
+La arquitectura ya no depende de Docker Compose como runtime productivo ni de un unico servidor de base de datos. Los puntos pendientes mas importantes para uso formal son reemplazar los quick tunnels por un subdominio fijo de Cloudflare y mantener observacion del nodo `parrot` despues de su recuperacion.

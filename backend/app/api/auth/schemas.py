@@ -19,3 +19,4 @@ class ForgotPasswordRequest(BaseModel):
 class MicrosoftLoginRequest(BaseModel):
     code: str
     redirect_uri: str
+    state: str

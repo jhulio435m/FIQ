@@ -17,6 +17,7 @@ class ExternalWork(BaseModel):
     external_url: str | None = None
     open_access_url: str | None = None
     license: str | None = None
+    language: str | None = None
     subjects: list[str] = Field(default_factory=list)
 
 

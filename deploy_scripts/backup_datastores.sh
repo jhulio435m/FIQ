@@ -33,8 +33,8 @@ backup_volume_arg() {
   echo "${workdir}:/backup"
 }
 
-if [[ -z "${POSTGRES_BACKUP_URL:-}" && -z "${MONGO_BACKUP_URI:-}" ]]; then
-  echo "At least one datastore URI is required: POSTGRES_BACKUP_URL or MONGO_BACKUP_URI" >&2
+if [[ -z "${POSTGRES_BACKUP_URL:-}" && -z "${MONGO_BACKUP_URI:-}" && -z "${S3_ENDPOINT:-}" ]]; then
+  echo "At least one datastore source is required: PostgreSQL, MongoDB or S3" >&2
   exit 2
 fi
 
@@ -61,6 +61,24 @@ backup_postgres() {
       pg_dump --format=custom --no-owner --no-acl --file="/backup/$(basename "${outfile}")" "${POSTGRES_BACKUP_URL}"
   fi
   sha256sum "${outfile}" > "${outfile}.sha256"
+}
+
+backup_minio() {
+  if [[ -z "${S3_ENDPOINT:-}" ]]; then
+    echo "Skipping object backup: S3_ENDPOINT is not set"
+    return
+  fi
+  : "${S3_ACCESS_KEY:?S3_ACCESS_KEY is required for object backup}"
+  : "${S3_SECRET_KEY:?S3_SECRET_KEY is required for object backup}"
+  local bucket="${S3_BUCKET_NAME:-fiq-recursos}"
+  local outdir="${workdir}/minio_${timestamp}"
+  require_cmd mc
+  mkdir -p "${outdir}"
+  MC_CONFIG_DIR="${workdir}/.mc" mc alias set fiq-source "${S3_ENDPOINT}" "${S3_ACCESS_KEY}" "${S3_SECRET_KEY}" >/dev/null
+  MC_CONFIG_DIR="${workdir}/.mc" mc mirror --overwrite "fiq-source/${bucket}" "${outdir}"
+  tar -C "${workdir}" -czf "${outdir}.tar.gz" "$(basename "${outdir}")"
+  sha256sum "${outdir}.tar.gz" > "${outdir}.tar.gz.sha256"
+  rm -rf "${outdir}" "${workdir}/.mc"
 }
 
 backup_mongo() {
@@ -107,6 +125,7 @@ timestamp=${timestamp}
 hostname=$(hostname)
 postgres_enabled=$([[ -n "${POSTGRES_BACKUP_URL:-}" ]] && echo true || echo false)
 mongo_enabled=$([[ -n "${MONGO_BACKUP_URI:-}" ]] && echo true || echo false)
+minio_enabled=$([[ -n "${S3_ENDPOINT:-}" ]] && echo true || echo false)
 retention_days=${retention_days}
 EOF
 }
@@ -117,6 +136,7 @@ cleanup_old_backups() {
 
 backup_postgres
 backup_mongo
+backup_minio
 write_manifest
 cleanup_old_backups
 chmod 0750 "${workdir}"

@@ -10,6 +10,9 @@ from app.core.config import settings
 from app.core.mongo import get_external_cache_collection
 
 
+EXTERNAL_CACHE_SCHEMA_VERSION = 2
+
+
 def build_cache_key(kind: str, params: dict[str, Any]) -> str:
     normalized = {
         key: value.strip().lower() if isinstance(value, str) else value
@@ -17,7 +20,7 @@ def build_cache_key(kind: str, params: dict[str, Any]) -> str:
         if value not in (None, "")
     }
     payload = json.dumps(
-        {"kind": kind, "params": normalized},
+        {"version": EXTERNAL_CACHE_SCHEMA_VERSION, "kind": kind, "params": normalized},
         sort_keys=True,
         separators=(",", ":"),
     )

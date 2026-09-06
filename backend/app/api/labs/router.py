@@ -3,7 +3,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from typing import Optional
 
-from app.core.database import get_db
+from app.core.database import get_db, get_read_db
 from app.core.users import get_optional_user
 from app.api.labs import crud
 from app.api.labs.schemas import ModuloLaboratorioResponse
@@ -18,7 +18,7 @@ router = APIRouter()
 @router.get("/", response_model=list[ModuloLaboratorioResponse])
 async def list_modules(
     nivel_id: Optional[int] = None,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
 ):
     return await crud.get_modules(db, nivel_id=nivel_id)
 
@@ -34,8 +34,8 @@ async def get_module(
     if not module:
         raise HTTPException(status_code=404, detail="Módulo de laboratorio no encontrado")
     if user:
-        tipo_res = await db.execute(select(TipoActividad).where(TipoActividad.nombre == "lab_access"))
-        tipo = tipo_res.scalar_one_or_none()
+        tipo_res = await db.exec(select(TipoActividad).where(TipoActividad.nombre == "lab_access"))
+        tipo = tipo_res.first()
         if tipo:
             await log_activity(
                 db,

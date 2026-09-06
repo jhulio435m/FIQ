@@ -49,7 +49,7 @@ async def _resource_rows(db: AsyncSession) -> list[dict[str, Any]]:
         .join(TipoRecurso, Recurso.tipo_recurso_id == TipoRecurso.id)
         .outerjoin(Curso, Recurso.curso_id == Curso.id)
     )
-    res = await db.execute(query)
+    res = await db.exec(query)
     return [
         {
             "id": r.id,
@@ -69,8 +69,8 @@ async def _resource_rows(db: AsyncSession) -> list[dict[str, Any]]:
 
 
 async def _course_rows(db: AsyncSession) -> list[dict[str, Any]]:
-    res = await db.execute(select(Curso))
-    courses = res.scalars().all()
+    res = await db.exec(select(Curso))
+    courses = res.all()
     return [
         {
             "id": c.id,
@@ -84,8 +84,8 @@ async def _course_rows(db: AsyncSession) -> list[dict[str, Any]]:
 
 
 async def _user_rows(db: AsyncSession) -> list[dict[str, Any]]:
-    res = await db.execute(select(User))
-    users = res.scalars().all()
+    res = await db.exec(select(User))
+    users = res.all()
     return [
         {
             "id": str(u.id),

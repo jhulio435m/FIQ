@@ -59,6 +59,7 @@ async def seed_tipos_recurso(db: AsyncSession) -> list[TipoRecurso]:
         TipoRecurso(id=2, nombre="Apunte"),
         TipoRecurso(id=3, nombre="Guía de laboratorio"),
         TipoRecurso(id=4, nombre="Tesis"),
+        TipoRecurso(id=5, nombre="Artículo"),
     ]
     db.add_all(tipos)
     return tipos

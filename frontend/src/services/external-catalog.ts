@@ -17,6 +17,7 @@ export interface ExternalWork {
   external_url: string | null
   open_access_url: string | null
   license: string | null
+  language: string | null
   subjects: string[]
 }
 
@@ -35,10 +36,14 @@ export interface ImportExternalResourcePayload {
   autores?: string | null
   editorial?: string | null
   doi?: string | null
+  isbn?: string | null
   anio?: number | null
   external_url?: string | null
   open_access_url?: string | null
   cover_url?: string | null
+  idioma?: string | null
+  licencia?: string | null
+  temas?: string[]
 }
 
 export async function searchExternalBooks(params: { q?: string; isbn?: string; limit?: number }) {

@@ -9,6 +9,7 @@ import { useAuthStore } from "@/stores/auth"
 import { toast } from "sonner"
 import type { Recurso } from "@/services/resources"
 import { PdfViewer } from "./pdf-viewer"
+import { ExternalResourcePreview } from "./external-resource-preview"
 import { isAdmin as checkIsAdmin } from "@/lib/auth"
 
 import { ResourceEditForm } from "./ResourceEditForm"
@@ -16,6 +17,7 @@ import { ResourceMetadataPanel } from "./ResourceMetadataPanel"
 import { ResourceCitationPanel } from "./ResourceCitationPanel"
 import { ResourceStatsPanel } from "./ResourceStatsPanel"
 import { ResourceActionBar } from "./ResourceActionBar"
+import { ResourceVersionsPanel } from "./resource-versions-panel"
 
 function getErrorStatus(error: unknown) {
   if (typeof error === "object" && error !== null && "response" in error) {
@@ -36,40 +38,38 @@ export function ResourceDetail({ resource, open, onOpenChange }: Props) {
   const { isAuthenticated, user } = useAuthStore()
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [loadingPdf, setLoadingPdf] = useState(false)
-  const [localResource, setLocalResource] = useState<Recurso | null>(null)
+  const [localResource, setLocalResource] = useState<Recurso | null>(resource)
 
   // Edit Mode States
   const [isEditing, setIsEditing] = useState(false)
 
   const isAdmin = checkIsAdmin(user)
+  const isExternalResource = resource?.archivo_mime === "text/html"
+
+  const resourceId = resource?.id
 
   useEffect(() => {
-    if (resource) {
-      setLocalResource(resource)
-      setIsEditing(false) // reset edit state when resource changes
-    }
-  }, [resource])
-
-  useEffect(() => {
-    if (resource && open) {
+    if (resourceId && open) {
       // Track view is now public
-      trackView(resource.id)
+      trackView(resourceId)
         .then((updated) => {
           setLocalResource(updated)
           queryClient.invalidateQueries({ queryKey: ["resources"] })
+          queryClient.invalidateQueries({ queryKey: ["resource-catalog"] })
+          queryClient.invalidateQueries({ queryKey: ["resource", resourceId] })
         })
         .catch((err) => {
           console.error("Error tracking view:", err)
         })
     }
-  }, [resource?.id, open, queryClient])
+  }, [resourceId, open, queryClient])
 
   useEffect(() => {
-    if (resource && open) {
+    if (resourceId && open) {
       const fetchUrl = async () => {
         setLoadingPdf(true)
         try {
-          const url = await getResourceUrl(resource.id)
+          const url = await getResourceUrl(resourceId)
           setPdfUrl(url)
         } catch {
           toast.error("Error al cargar la visualización del PDF")
@@ -78,10 +78,8 @@ export function ResourceDetail({ resource, open, onOpenChange }: Props) {
         }
       }
       fetchUrl()
-    } else {
-      setPdfUrl(null)
     }
-  }, [resource?.id, open])
+  }, [resourceId, open])
 
   if (!resource || !localResource) return null
 
@@ -109,6 +107,8 @@ export function ResourceDetail({ resource, open, onOpenChange }: Props) {
       link.click()
       
       queryClient.invalidateQueries({ queryKey: ["resources"] })
+      queryClient.invalidateQueries({ queryKey: ["resource-catalog"] })
+      queryClient.invalidateQueries({ queryKey: ["resource", resource.id] })
     } catch (error: unknown) {
       if (getErrorStatus(error) === 401) {
         toast.error("Sesión expirada. Por favor inicie sesión nuevamente.")
@@ -131,7 +131,9 @@ export function ResourceDetail({ resource, open, onOpenChange }: Props) {
               <p className="text-xs">Cargando visor de PDF seguro...</p>
             </div>
           ) : pdfUrl ? (
-            <PdfViewer url={pdfUrl} />
+            isExternalResource
+              ? <ExternalResourcePreview url={pdfUrl} />
+              : <PdfViewer url={pdfUrl} resourceId={localResource.id} />
           ) : (
             <div className="flex-1 flex items-center justify-center bg-red-950/20 text-red-400 border border-red-900/50 m-6 rounded-xl text-xs gap-2">
               No se pudo generar la vista previa del documento.
@@ -171,15 +173,18 @@ export function ResourceDetail({ resource, open, onOpenChange }: Props) {
               <ResourceMetadataPanel resource={localResource} />
               <ResourceCitationPanel resource={localResource} />
               <ResourceStatsPanel resource={localResource} />
+              <ResourceVersionsPanel resourceId={localResource.id} />
             </div>
           )}
 
-          <ResourceActionBar isAuthenticated={isAuthenticated()} onDownload={handleDownload} />
+          <ResourceActionBar
+            isAuthenticated={isAuthenticated()}
+            resourceId={localResource.id}
+            onDownload={handleDownload}
+          />
         </div>
 
       </DialogContent>
     </Dialog>
   )
 }
-
-

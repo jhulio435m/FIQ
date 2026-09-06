@@ -26,7 +26,16 @@ class RecursoBase(SQLModel):
     autores: Optional[str] = Field(default=None, nullable=True, max_length=300)
     editorial: Optional[str] = Field(default=None, nullable=True, max_length=200)
     doi: Optional[str] = Field(default=None, nullable=True, max_length=100)
+    isbn: Optional[str] = Field(default=None, nullable=True, max_length=32)
     anio: Optional[int] = Field(default=None, nullable=True)
+    idioma: Optional[str] = Field(default=None, nullable=True, max_length=16)
+    cover_url: Optional[str] = Field(default=None, nullable=True, max_length=500)
+    licencia: Optional[str] = Field(default=None, nullable=True, max_length=300)
+    temas: Optional[str] = Field(default=None, nullable=True, max_length=1000)
+    fuente_externa: Optional[str] = Field(default=None, nullable=True, max_length=50)
+    external_id: Optional[str] = Field(default=None, nullable=True, max_length=200)
+    scan_status: str = Field(default="clean", max_length=20, index=True)
+    contenido_texto: Optional[str] = Field(default=None, nullable=True)
 
 
 

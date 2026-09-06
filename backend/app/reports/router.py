@@ -1,4 +1,5 @@
 import json
+import secrets
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status, Header
@@ -7,7 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy import cast, Date
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_read_db
 from app.core.dependencies import require_role
 from app.core.mongo import get_activity_events_collection, get_external_cache_collection
 from app.models.resource import Recurso, TipoRecurso, Curso
@@ -28,15 +29,14 @@ router = APIRouter()
 
 async def _require_dashboard_api_key(
     x_api_key: str | None = Header(None, alias="X-API-Key"),
-    api_key: str | None = Query(None),
 ) -> str:
     if not settings.DASHBOARD_API_KEY:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Dashboard API key no configurada",
         )
-    provided_key = x_api_key or api_key
-    if provided_key != settings.DASHBOARD_API_KEY:
+    provided_key = x_api_key or ""
+    if not secrets.compare_digest(provided_key, settings.DASHBOARD_API_KEY):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API Key",
@@ -53,7 +53,7 @@ async def _document_metrics_payload(limit: int) -> dict[str, Any]:
 
 @router.get("/most-viewed")
 async def most_viewed(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     _: User = Depends(require_role("Admin")),
 ):
     result = await db.execute(
@@ -75,7 +75,7 @@ async def most_viewed(
 
 @router.get("/labs-usage")
 async def labs_usage(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     _: User = Depends(require_role("Admin")),
 ):
     # Fix the activity type name to match actual production logs
@@ -98,7 +98,7 @@ async def labs_usage(
 @router.get("/public/dashboard-data")
 async def public_dashboard_data(
     _: str = Depends(_require_dashboard_api_key),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
 ):
 
     # 1. Counts for Summary Cards
@@ -191,7 +191,7 @@ async def public_dashboard_data(
 @router.get("/public/resources")
 async def public_resources(
     _: str = Depends(_require_dashboard_api_key),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
 ):
     return await _resource_rows(db)
 
@@ -199,7 +199,7 @@ async def public_resources(
 @router.get("/public/courses")
 async def public_courses(
     _: str = Depends(_require_dashboard_api_key),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
 ):
     return await _course_rows(db)
 
@@ -207,7 +207,7 @@ async def public_courses(
 @router.get("/public/users")
 async def public_users(
     _: str = Depends(_require_dashboard_api_key),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
 ):
     return await _user_rows(db)
 
@@ -215,7 +215,7 @@ async def public_users(
 @router.get("/public/activities")
 async def public_activities(
     _: str = Depends(_require_dashboard_api_key),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
 ):
     return await _activity_rows(db)
 
@@ -259,7 +259,7 @@ async def public_looker_studio_data(
     table_name: str,
     _: str = Depends(_require_dashboard_api_key),
     limit: int = Query(100, ge=1, le=500),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
 ):
 
     if table_name == "summary":

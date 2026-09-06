@@ -16,7 +16,6 @@ describe("Login", () => {
     vi.mocked(login).mockReset()
     vi.mocked(login).mockResolvedValue({
       access_token: "test-token",
-      refresh_token: "refresh-token",
       token_type: "bearer",
       usuario: {
         id: "admin-id",
@@ -39,6 +38,8 @@ describe("Login", () => {
     await waitFor(() => {
       expect(useAuthStore.getState().user?.rol).toBe("Admin")
       expect(useAuthStore.getState().accessToken).toBe("test-token")
+      expect(window.localStorage.getItem("access_token")).toBeNull()
+      expect(window.localStorage.getItem("refresh_token")).toBeNull()
     })
   })
 

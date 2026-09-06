@@ -7,6 +7,7 @@ from fastapi import UploadFile
 
 from app.core.config import settings
 import logging
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +73,9 @@ class S3Service:
         async with self.session.client(**self.config) as s3:
             try:
                 await s3.create_bucket(Bucket=self.bucket_name)
-            except Exception:
-                pass
+            except ClientError as exc:
+                if exc.response.get("Error", {}).get("Code") not in {"BucketAlreadyOwnedByYou", "BucketAlreadyExists"}:
+                    raise
             await s3.upload_fileobj(
                 file.file,
                 self.bucket_name,
@@ -81,5 +83,29 @@ class S3Service:
                 ExtraArgs={"ContentType": file.content_type or "application/octet-stream"},
             )
         return key
+
+    async def read_object(self, key: str, max_size: int) -> bytes:
+        async with self.session.client(**self.config) as s3:
+            obj = await s3.get_object(Bucket=self.bucket_name, Key=key)
+            content = await obj["Body"].read(max_size + 1)
+            obj["Body"].close()
+        if len(content) > max_size:
+            raise ValueError("object exceeds maximum size")
+        return content
+
+    async def quarantine_object(self, key: str) -> None:
+        quarantine_bucket = settings.S3_QUARANTINE_BUCKET_NAME
+        async with self.session.client(**self.config) as s3:
+            try:
+                await s3.create_bucket(Bucket=quarantine_bucket)
+            except ClientError as exc:
+                if exc.response.get("Error", {}).get("Code") not in {"BucketAlreadyOwnedByYou", "BucketAlreadyExists"}:
+                    raise
+            await s3.copy_object(
+                Bucket=quarantine_bucket,
+                Key=key,
+                CopySource={"Bucket": self.bucket_name, "Key": key},
+            )
+            await s3.delete_object(Bucket=self.bucket_name, Key=key)
 
 s3_service = S3Service()

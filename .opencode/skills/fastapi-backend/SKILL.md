@@ -1,49 +1,72 @@
 ---
 name: fastapi-backend
-description: Use when building or modifying FastAPI backend endpoints, services, models, or schemas. Covers layered architecture, SQLAlchemy, Pydantic, auth patterns.
+description: Use when building or modifying the FIQ FastAPI backend: routers, services, CRUD, SQLModel models, Pydantic schemas, auth/RBAC, uploads, activity logging, OpenAPI, and backend tests.
 ---
 
 # FastAPI Backend — FIQ Project
 
 ## Stack
-- **FastAPI** + SQLAlchemy 2.0 + Pydantic v2
-- **PostgreSQL 17** + Redis 7
-- **Alembic** for migrations
-- **python-jose** for JWT, **passlib[bcrypt]** for passwords
-- **pydantic-settings** for config (`.env` file)
-- **UV** for dependency management (`pyproject.toml` + `uv.lock`)
+- FastAPI + SQLModel/SQLAlchemy 2.0 async + Pydantic v2
+- PostgreSQL 17 + Redis 7
+- MongoDB for activity/event cache paths when enabled
+- MinIO/S3 for resource files
+- Alembic for migrations
+- python-jose for JWT, passlib/bcrypt for passwords
+- FastAPI Users where existing auth/user-manager code already uses it
+- pydantic-settings for config, UV for dependency management
 
-## Layered Architecture (per domain)
-Each domain module follows:
+## Architecture
+Prefer the existing FIQ domain pattern:
 
-```
+```text
 app/api/<domain>/
-├── models.py    # SQLAlchemy models
-├── schemas.py   # Pydantic request/response
-├── crud.py      # DB operations (raw SQLAlchemy queries)
-├── service.py   # Business logic (optional, for complex rules)
-└── router.py    # FastAPI endpoints
+├── models.py
+├── schemas.py
+├── crud.py
+├── service.py
+└── router.py
 ```
 
-## Flow
-`Router → Service (optional) → CRUD → Model`
+Shared models can live in `app/models/`. Shared config, DB, auth, cache, S3 and seed code lives in `app/core/`.
 
-- Routers handle HTTP concerns only (parsing, status codes, deps)
-- Services contain business logic
-- CRUD is the only layer that touches the DB
-- Models define tables, Schemas define JSON shapes
+Flow: `Router -> Service (optional) -> CRUD -> Model`.
 
-## Auth
-- `app/core/security.py`: `hash_password()`, `verify_password()`, `create_access_token()`, `decode_token()`
-- `app/core/dependencies.py`: `get_current_user()`, `require_role("Admin")`
-- JWT in `Authorization: Bearer <token>` header
+- Routers handle HTTP concerns only.
+- Services contain business rules.
+- CRUD is the only layer that touches SQL.
+- Use `AsyncSession` from `sqlmodel.ext.asyncio.session`.
+- Use `select()`/`session.exec()` or the established local async style; do not introduce sync DB calls in async endpoints.
 
-## Error handling
-- `ValueError` in service → catch in router → raise `HTTPException(400)`
-- `HTTPException(401)` for auth, `403` for permissions, `404` for not found
+## Auth and RBAC
+- JWT is sent as `Authorization: Bearer <token>`.
+- Preserve roles: `Admin`, `Docente`, `Estudiante`.
+- Protected upload/admin endpoints return `401` for missing/invalid auth and `403` for authenticated users without the role.
+- Use `app/core/dependencies.py` helpers such as `get_current_user()` and `require_role("Admin")`.
 
-## API conventions
-- Prefixes: `/auth`, `/users`, `/resources`, `/labs`, `/activity`, `/reports`
-- Pagination: `skip`/`limit` query params
-- File upload: `UploadFile` + `Form(...)` in multipart
-- Response models: Pydantic schemas with `model_config = {"from_attributes": True}`
+## API Conventions
+- Prefixes: `/auth`, `/users`, `/resources`, `/labs`, `/activity`, `/reports`.
+- Pagination: `skip`/`limit` query params unless an existing endpoint uses another documented contract.
+- File upload: `UploadFile` + `Form(...)` in multipart.
+- Response models use Pydantic v2 and `model_config = {"from_attributes": True}`.
+- Explicit response models are required to avoid leaking hashes, tokens, internal paths, S3 secrets, Mongo metadata, or stack traces.
+
+## Resource and Upload Rules
+- Validate file size, extension, MIME type and safe filename before storing.
+- Log rejected uploads through the existing activity/log path when available.
+- Public resource lists expose only approved records.
+- View/download counters must persist and be covered by tests when changed.
+- External catalog imports must keep source attribution and treat third-party payloads as untrusted.
+
+## Verification
+Run the smallest relevant gate first, then broaden if behavior crosses modules:
+
+```bash
+cd backend
+UV_CACHE_DIR=/tmp/fiq-uv-cache uv run --extra dev pytest
+```
+
+For API contract changes also run:
+
+```bash
+npm run openapi:check
+```

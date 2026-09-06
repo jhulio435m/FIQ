@@ -54,9 +54,32 @@ stop_patroni_on_ip() {
   fi
 }
 
+start_patroni_on_ip() {
+  local ip="$1"
+  if [[ "${ip}" == "${NODE1_IP}" ]]; then
+    ssh_node1 "cd ~/FIQ/ha-database && (docker compose -f compose.yaml start patroni || podman-compose -f compose.yaml start patroni)"
+  elif [[ "${ip}" == "${NODE2_IP}" ]]; then
+    ssh_node2 "cd ~/FIQ/ha-database && (docker compose -f compose.yaml start patroni || podman-compose -f compose.yaml start patroni)"
+  elif [[ "${ip}" == "${NODE3_IP}" ]]; then
+    (cd ha-database && docker compose -f compose.yaml start patroni || podman-compose -f compose.yaml start patroni)
+  fi
+}
+
+restore_old_leader() {
+  if [[ -n "${FAILOVER_OLD_LEADER:-}" ]]; then
+    start_patroni_on_ip "${FAILOVER_OLD_LEADER}"
+  fi
+}
+
 main() {
   local old_leader new_leader
+  if [[ "${CONFIRM_FAILOVER_TEST:-}" != "yes" ]]; then
+    echo "Set CONFIRM_FAILOVER_TEST=yes only against an authorized staging cluster" >&2
+    return 2
+  fi
   old_leader="$(leader_ip)"
+  FAILOVER_OLD_LEADER="${old_leader}"
+  trap restore_old_leader EXIT
   echo "Current leader: ${old_leader}"
   echo "HAProxy write query before failover:"
   query_via_haproxy
@@ -70,6 +93,9 @@ main() {
       echo "New leader: ${new_leader}"
       echo "HAProxy write query after failover:"
       query_via_haproxy
+      start_patroni_on_ip "${old_leader}"
+      FAILOVER_OLD_LEADER=""
+      trap - EXIT
       return 0
     fi
     sleep 2

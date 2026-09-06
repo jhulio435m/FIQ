@@ -54,6 +54,8 @@ services:
       NODE1_IP: ${NODE1_IP}
       NODE2_IP: ${NODE2_IP}
       NODE3_IP: ${NODE3_IP}
+      NODE4_IP: ${NODE4_IP}
+      NODE5_IP: ${NODE5_IP}
     entrypoint: ["/usr/local/bin/render-haproxy.sh"]
     volumes:
       - ./haproxy.cfg.tpl:/usr/local/etc/haproxy/haproxy.cfg.tpl:ro

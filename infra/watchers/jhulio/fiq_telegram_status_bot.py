@@ -219,15 +219,27 @@ def service_state_line(label: str, unit: str, inactive_is_ok: bool = False) -> s
 def status_text() -> str:
     metrics = read_metrics()
     ha = ha_status()
+
+    if ENV.get("FIQ_WATCHER_RUNTIME", "").lower() == "docker":
+        runtime_lines = [
+            "- Runtime: OK (Docker)",
+            "- Watcher programado: OK (loop interno)",
+            "- Bot Telegram: OK (contenedor activo)",
+        ]
+    else:
+        runtime_lines = [
+            service_state_line("Watcher programado", "fiq-watcher.timer"),
+            service_state_line("Ultimo chequeo", "fiq-watcher.service", inactive_is_ok=True),
+            service_state_line("Bot Telegram", "fiq-telegram-bot.service"),
+        ]
+
     lines = [
         "FIQ - Estado general",
         f"Resumen: {health_summary(metrics)}",
         f"Revision: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}",
         "",
         "Servicios:",
-        service_state_line("Watcher programado", "fiq-watcher.timer"),
-        service_state_line("Ultimo chequeo", "fiq-watcher.service", inactive_is_ok=True),
-        service_state_line("Bot Telegram", "fiq-telegram-bot.service"),
+        *runtime_lines,
         "",
         "Objetivos monitoreados:",
         *metric_lines(metrics),

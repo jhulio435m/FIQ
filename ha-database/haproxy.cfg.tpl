@@ -23,8 +23,10 @@ listen postgres_write
     http-check expect status 200
     default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
     server oti ${NODE1_IP}:5432 maxconn 200 check port 8008
-    server ubuntu ${NODE2_IP}:5432 maxconn 200 check port 8008
-    server laptop ${NODE3_IP}:5432 maxconn 200 check port 8008
+    server abc ${NODE2_IP}:5432 maxconn 200 check port 8008
+    server server ${NODE3_IP}:5432 maxconn 200 check port 8008
+    server arch ${NODE4_IP}:5432 maxconn 200 check port 8008
+    server debian ${NODE5_IP}:5432 maxconn 200 check port 8008
 
 listen postgres_read
     bind *:5001
@@ -32,5 +34,7 @@ listen postgres_read
     http-check expect status 200
     default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
     server oti ${NODE1_IP}:5432 maxconn 200 check port 8008
-    server ubuntu ${NODE2_IP}:5432 maxconn 200 check port 8008
-    server laptop ${NODE3_IP}:5432 maxconn 200 check port 8008
+    server abc ${NODE2_IP}:5432 maxconn 200 check port 8008
+    server server ${NODE3_IP}:5432 maxconn 200 check port 8008
+    server arch ${NODE4_IP}:5432 maxconn 200 check port 8008
+    server debian ${NODE5_IP}:5432 maxconn 200 check port 8008

@@ -21,6 +21,7 @@ class User(SQLModelBaseUserDB, table=True):
     nombre: str = Field(max_length=255, index=True)
     rol_id: int = Field(default=3, foreign_key="roles.id")
     esta_activo: bool = Field(default=True)
+    auth_version: int = Field(default=0)
 
     @property
     def rol(self) -> str:

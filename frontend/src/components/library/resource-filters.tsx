@@ -1,13 +1,14 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type { CatalogSort } from "@/services/resources"
 
 interface ResourceFiltersProps {
-  sortBy: string
-  onSortChange: (v: string) => void
+  sortBy: CatalogSort
+  onSortChange: (v: CatalogSort) => void
 }
 
 export function ResourceFilters({ sortBy, onSortChange }: ResourceFiltersProps) {
   return (
-    <Select value={sortBy} onValueChange={(v: string | null) => v && onSortChange(v)}>
+    <Select value={sortBy} onValueChange={(v: string | null) => v && onSortChange(v as CatalogSort)}>
       <SelectTrigger className="w-[180px]">
         <SelectValue placeholder="Ordenar por" />
       </SelectTrigger>

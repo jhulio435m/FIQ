@@ -23,3 +23,22 @@ spec:
     - name: http
       port: 80
       targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-ha
+  namespace: fiq
+spec:
+  selector:
+    app.kubernetes.io/name: postgres-haproxy
+  ports:
+    - name: write
+      port: 5000
+      targetPort: write
+    - name: read
+      port: 5001
+      targetPort: read
+    - name: stats
+      port: 7000
+      targetPort: stats

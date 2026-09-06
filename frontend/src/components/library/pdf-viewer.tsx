@@ -1,6 +1,27 @@
 import { useEffect, useRef, useState } from "react"
-import { Loader2, ZoomIn, ZoomOut, AlertCircle, Maximize2, FileText } from "lucide-react"
+import {
+  Loader2,
+  ZoomIn,
+  ZoomOut,
+  AlertCircle,
+  Maximize2,
+  FileText,
+  Bookmark as BookmarkIcon,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { toast } from "sonner"
+import { useAuthStore } from "@/stores/auth"
+import {
+  type Bookmark,
+  getBookmarks,
+  createBookmark,
+  deleteBookmark,
+} from "@/services/personal-library"
 
 interface PdfViewport {
   width: number
@@ -43,12 +64,21 @@ const PDFJS_VERSION = "3.11.174"
 const PDFJS_SCRIPT_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.js`
 const PDFJS_WORKER_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`
 
+const COLOR_OPTIONS = [
+  { value: "#3b82f6", label: "Azul" },
+  { value: "#10b981", label: "Verde" },
+  { value: "#f59e0b", label: "Ámbar" },
+  { value: "#ef4444", label: "Rojo" },
+  { value: "#8b5cf6", label: "Púrpura" },
+]
+
 interface Props {
   url: string
+  resourceId?: number
 }
 
-export function PdfViewer({ url }: Props) {
-  const [libLoaded, setLibLoaded] = useState(false)
+export function PdfViewer({ url, resourceId }: Props) {
+  const [libLoaded, setLibLoaded] = useState(() => Boolean(window.pdfjsLib))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [pdfDoc, setPdfDoc] = useState<PdfJsDocument | null>(null)
@@ -56,10 +86,82 @@ export function PdfViewer({ url }: Props) {
   const [scale, setScale] = useState(1.25)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  const user = useAuthStore((s) => s.user)
+  const [showBookmarks, setShowBookmarks] = useState(false)
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
+  const [loadingBookmarks, setLoadingBookmarks] = useState(false)
+  const [isCreatingBookmark, setIsCreatingBookmark] = useState(false)
+  const [newPage, setNewPage] = useState(1)
+  const [newTitle, setNewTitle] = useState("")
+  const [newContent, setNewContent] = useState("")
+  const [newColor, setNewColor] = useState("#3b82f6")
+  const [submittingBookmark, setSubmittingBookmark] = useState(false)
+
+  useEffect(() => {
+    if (!resourceId || !user) {
+      return
+    }
+    let isMounted = true
+    const fetchBookmarks = async () => {
+      setLoadingBookmarks(true)
+      try {
+        const data = await getBookmarks(resourceId)
+        if (isMounted) setBookmarks(data)
+      } catch (err: unknown) {
+        console.error("Error loading bookmarks:", err)
+      } finally {
+        if (isMounted) setLoadingBookmarks(false)
+      }
+    }
+    void fetchBookmarks()
+    return () => {
+      isMounted = false
+    }
+  }, [resourceId, user])
+
+  const handleCreateBookmark = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!resourceId || !newTitle.trim()) return
+    setSubmittingBookmark(true)
+    try {
+      const created = await createBookmark(resourceId, {
+        pagina: Math.max(1, Math.min(newPage, numPages || 9999)),
+        titulo: newTitle.trim(),
+        contenido: newContent.trim() || null,
+        color: newColor,
+      })
+      setBookmarks((prev) => [...prev, created].sort((a, b) => a.pagina - b.pagina))
+      setNewTitle("")
+      setNewContent("")
+      setIsCreatingBookmark(false)
+      toast.success("Marcador guardado")
+    } catch {
+      toast.error("No se pudo guardar el marcador")
+    } finally {
+      setSubmittingBookmark(false)
+    }
+  }
+
+  const handleDeleteBookmark = async (bookmarkId: string) => {
+    try {
+      await deleteBookmark(bookmarkId)
+      setBookmarks((prev) => prev.filter((b) => b.id !== bookmarkId))
+      toast.success("Marcador eliminado")
+    } catch {
+      toast.error("No se pudo eliminar el marcador")
+    }
+  }
+
+  const handleJumpToPage = (targetPage: number) => {
+    const el = document.getElementById(`pdf-page-${targetPage}`)
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
+  }
+
   // 1. Load PDF.js library from CDN
   useEffect(() => {
     if (window.pdfjsLib) {
-      setLibLoaded(true)
       return
     }
 
@@ -197,6 +299,21 @@ export function PdfViewer({ url }: Props) {
             <Maximize2 className="h-3.5 w-3.5 mr-1" />
             Ajustar
           </Button>
+          {resourceId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-8 text-xs cursor-pointer px-2.5 transition-colors ${
+                showBookmarks
+                  ? "bg-brand-500/20 text-brand-300 border border-brand-500/40"
+                  : "text-zinc-300 hover:text-white hover:bg-zinc-700"
+              }`}
+              onClick={() => setShowBookmarks((prev) => !prev)}
+            >
+              <BookmarkIcon className="h-3.5 w-3.5 mr-1.5 text-brand-400" />
+              Notas {bookmarks.length > 0 && `(${bookmarks.length})`}
+            </Button>
+          )}
         </div>
 
         {/* Info Badge */}
@@ -253,6 +370,172 @@ export function PdfViewer({ url }: Props) {
             </div>
           )}
         </div>
+
+        {/* Right Sidebar: Notes & Bookmarks */}
+        {showBookmarks && (
+          <div className="w-80 shrink-0 border-l border-zinc-800 bg-zinc-900/95 flex flex-col h-full z-20">
+            <div className="flex items-center justify-between p-3.5 border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <BookmarkIcon className="h-4 w-4 text-brand-400" />
+                <span className="text-xs font-semibold text-zinc-100">Marcadores y Notas</span>
+              </div>
+              <button
+                onClick={() => setShowBookmarks(false)}
+                className="text-zinc-400 hover:text-white p-1 rounded hover:bg-zinc-800 cursor-pointer"
+                aria-label="Cerrar notas"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {!user ? (
+              <div className="p-5 text-center text-xs text-zinc-400 space-y-2">
+                <p>Inicia sesión con tu cuenta institucional para guardar notas y marcadores en tus documentos.</p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5 scrollbar-thin scrollbar-thumb-zinc-700">
+                {isCreatingBookmark ? (
+                  <form onSubmit={handleCreateBookmark} className="space-y-3 p-3 bg-zinc-800/80 rounded-lg border border-zinc-700/60">
+                    <div>
+                      <label className="text-3xs uppercase tracking-wider text-zinc-400 block mb-1">Título</label>
+                      <Input
+                        placeholder="Ej. Resumen de balance"
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        className="h-8 text-xs bg-zinc-900 border-zinc-700 text-zinc-100"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="w-20">
+                        <label className="text-3xs uppercase tracking-wider text-zinc-400 block mb-1">Pág.</label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={numPages || 1000}
+                          value={newPage}
+                          onChange={(e) => setNewPage(parseInt(e.target.value, 10) || 1)}
+                          className="h-8 text-xs bg-zinc-900 border-zinc-700 text-zinc-100"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-3xs uppercase tracking-wider text-zinc-400 block mb-1">Color</label>
+                        <div className="flex items-center gap-1.5 pt-1">
+                          {COLOR_OPTIONS.map((c) => (
+                            <button
+                              key={c.value}
+                              type="button"
+                              onClick={() => setNewColor(c.value)}
+                              className={`h-4.5 w-4.5 rounded-full border-2 transition-all cursor-pointer ${
+                                newColor === c.value ? "border-white scale-115" : "border-transparent opacity-70"
+                              }`}
+                              style={{ backgroundColor: c.value }}
+                              title={c.label}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-3xs uppercase tracking-wider text-zinc-400 block mb-1">Nota (opcional)</label>
+                      <Textarea
+                        placeholder="Escribe tus apuntes o fórmulas aquí..."
+                        value={newContent}
+                        onChange={(e) => setNewContent(e.target.value)}
+                        className="text-xs bg-zinc-900 border-zinc-700 text-zinc-100 min-h-[60px] resize-none"
+                        rows={2}
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-zinc-400 hover:text-white cursor-pointer"
+                        onClick={() => setIsCreatingBookmark(false)}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        disabled={submittingBookmark || !newTitle.trim()}
+                        className="h-7 text-xs bg-brand-500 hover:bg-brand-600 text-white cursor-pointer"
+                      >
+                        {submittingBookmark ? <Loader2 className="h-3 w-3 animate-spin" /> : "Guardar"}
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      setIsCreatingBookmark(true)
+                    }}
+                    size="sm"
+                    variant="outline"
+                    className="w-full text-xs border-zinc-700 text-zinc-200 hover:bg-zinc-800 hover:text-white justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Nueva nota / marcador
+                  </Button>
+                )}
+
+                {loadingBookmarks ? (
+                  <div className="flex justify-center py-6">
+                    <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
+                  </div>
+                ) : bookmarks.length === 0 ? (
+                  <p className="text-center text-xs text-zinc-500 py-6">
+                    No tienes notas ni marcadores guardados en este documento.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {bookmarks.map((bm) => (
+                      <div
+                        key={bm.id}
+                        className="p-2.5 rounded-lg bg-zinc-800/60 border border-zinc-700/50 hover:border-zinc-600 transition-colors group relative"
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: bm.color || "#3b82f6" }}
+                            />
+                            <span className="text-xs font-semibold text-zinc-200 line-clamp-1">
+                              {bm.titulo}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteBookmark(bm.id)}
+                            className="text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 cursor-pointer"
+                            title="Eliminar marcador"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        {bm.contenido && (
+                          <p className="text-xs text-zinc-400 mt-1 pl-4 line-clamp-3 italic">
+                            {bm.contenido}
+                          </p>
+                        )}
+                        <div className="mt-2 pl-4 flex items-center justify-between">
+                          <span className="text-3xs text-zinc-500">Pág. {bm.pagina}</span>
+                          <button
+                            onClick={() => handleJumpToPage(bm.pagina)}
+                            className="text-3xs text-brand-400 hover:text-brand-300 font-medium cursor-pointer"
+                          >
+                            Ir a página →
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

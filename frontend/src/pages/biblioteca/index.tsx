@@ -1,26 +1,32 @@
 import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
+import { useNavigate, useParams } from "react-router"
 import { SearchBar } from "@/components/library/search-bar"
 import { ResourceFilters } from "@/components/library/resource-filters"
 import { ResourceGrid } from "@/components/library/resource-grid"
 import { ResourceDetail } from "@/components/library/resource-detail"
 import { UploadDialog } from "@/components/library/upload-dialog"
 import { ExternalCatalogPanel } from "@/components/library/external-catalog-panel"
-import { getResources } from "@/services/resources"
+import { getResource, getResourceCatalog } from "@/services/resources"
 import { useDebounce } from "@/hooks/use-debounce"
 import { Button } from "@/components/ui/button"
 import { useAuthStore } from "@/stores/auth"
 import { SlidersHorizontal, X } from "lucide-react"
-import type { Recurso, TipoRecurso } from "@/services/resources"
-import { useResourceTypes } from "@/hooks/use-resource-data"
+import type { CatalogSort, Curso, Recurso, TipoRecurso } from "@/services/resources"
+import { useCourses, useResourceTypes } from "@/hooks/use-resource-data"
 import { canUpload } from "@/lib/auth"
 
 
 
 export default function Biblioteca() {
+  const navigate = useNavigate()
+  const { resourceId } = useParams()
+  const parsedResourceId = resourceId ? Number(resourceId) : null
+  const hasValidResourceId = parsedResourceId !== null && Number.isSafeInteger(parsedResourceId) && parsedResourceId > 0
+  const [searchScope, setSearchScope] = useState<"local" | "external">("local")
   const [search, setSearch] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
-  const [sortBy, setSortBy] = useState("recent")
+  const [sortBy, setSortBy] = useState<CatalogSort>("recent")
   const [selected, setSelected] = useState<Recurso | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [facetOpen, setFacetOpen] = useState(false)
@@ -32,34 +38,48 @@ export default function Biblioteca() {
   const debouncedSearch = useDebounce(search, 400)
 
   const { data: tipos = [] } = useResourceTypes()
+  const { data: cursos = [] } = useCourses()
 
-  const { data: resources = [], isLoading } = useQuery({
-    queryKey: ["resources", debouncedSearch, typeFilter],
-    queryFn: () =>
-      getResources({
+  const pageSize = 20
+  const resourcesQuery = useInfiniteQuery({
+    queryKey: ["resource-catalog", debouncedSearch, typeFilter, cursoFilter, sortBy],
+    queryFn: ({ pageParam }) =>
+      getResourceCatalog({
         search: debouncedSearch || undefined,
         tipo_recurso_id: typeFilter !== "all" ? Number(typeFilter) : undefined,
+        curso_id: cursoFilter !== "all" ? Number(cursoFilter) : undefined,
+        sort: sortBy,
+        skip: pageParam,
+        limit: pageSize,
       }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) =>
+      lastPage.has_more ? lastPage.skip + lastPage.items.length : undefined,
+    enabled: searchScope === "local",
   })
 
-  const cursos = [...new Set(resources.map((r) => r.curso_nombre).filter((c): c is string => c !== null))]
+  const resourceQuery = useQuery({
+    queryKey: ["resource", parsedResourceId],
+    queryFn: () => getResource(parsedResourceId as number),
+    enabled: hasValidResourceId,
+  })
 
-  const filtered = resources
-    .filter((r) => {
-      if (typeFilter !== "all" && r.tipo_recurso_id !== Number(typeFilter)) return false
-      if (cursoFilter !== "all" && r.curso_nombre !== cursoFilter) return false
-      return true
-    })
-    .sort((a, b) => {
-      if (sortBy === "views") return b.visualizaciones - a.visualizaciones
-      if (sortBy === "downloads") return b.descargas - a.descargas
-      if (sortBy === "title") return a.titulo.localeCompare(b.titulo)
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    })
+  const resources = resourcesQuery.data?.pages.flatMap((page) => page.items) ?? []
+  const totalResources = resourcesQuery.data?.pages[0]?.total ?? 0
+  const displayedResource = resourceQuery.data ?? selected
+  const isDetailOpen = detailOpen || (hasValidResourceId && Boolean(resourceQuery.data))
 
   const handleSelect = (r: Recurso) => {
     setSelected(r)
     setDetailOpen(true)
+    void navigate(`/biblioteca/recurso/${r.id}`)
+  }
+
+  const handleDetailOpenChange = (nextOpen: boolean) => {
+    setDetailOpen(nextOpen)
+    if (!nextOpen && resourceId) {
+      void navigate("/biblioteca")
+    }
   }
 
   return (
@@ -68,7 +88,35 @@ export default function Biblioteca() {
         <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-brand-900 dark:text-brand-100 mb-3">Biblioteca Virtual</h1>
-            <SearchBar value={search} onChange={setSearch} placeholder="Buscar por título, materia, autor..." />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="inline-flex w-fit rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-zinc-800 dark:bg-zinc-900" aria-label="Origen de búsqueda">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={searchScope === "local" ? "default" : "ghost"}
+                  aria-pressed={searchScope === "local"}
+                  onClick={() => setSearchScope("local")}
+                >
+                  Biblioteca local
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={searchScope === "external" ? "default" : "ghost"}
+                  aria-pressed={searchScope === "external"}
+                  onClick={() => setSearchScope("external")}
+                >
+                  APIs académicas
+                </Button>
+              </div>
+              <SearchBar
+                value={search}
+                onChange={setSearch}
+                placeholder={searchScope === "local"
+                  ? "Buscar por título, resumen, autor, curso o DOI..."
+                  : "Buscar libros, artículos o un DOI..."}
+              />
+            </div>
           </div>
           {userCanUpload && (
             <div className="pb-1">
@@ -79,9 +127,16 @@ export default function Biblioteca() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-4">
+        {resourceId && (!hasValidResourceId || resourceQuery.isError) && (
+          <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">
+            El recurso solicitado no existe o todavía no está aprobado.
+          </div>
+        )}
+        {searchScope === "local" && <div className="flex items-center justify-between mb-4">
           <p className="text-sm text-gray-500 dark:text-zinc-400">
-            {isLoading ? "Buscando..." : `${filtered.length} recurso${filtered.length !== 1 ? "s" : ""} encontrado${filtered.length !== 1 ? "s" : ""}`}
+            {resourcesQuery.isLoading
+              ? "Buscando..."
+              : `${totalResources} resultado${totalResources !== 1 ? "s" : ""}${resources.length < totalResources ? ` · ${resources.length} cargados` : ""}`}
           </p>
           <div className="flex items-center gap-3">
             <ResourceFilters
@@ -98,8 +153,9 @@ export default function Biblioteca() {
               Filtros
             </Button>
           </div>
-        </div>
+        </div>}
 
+        {searchScope === "local" ? (
         <div className="flex gap-6">
           {facetOpen && (
             <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setFacetOpen(false)}>
@@ -137,20 +193,41 @@ export default function Biblioteca() {
           </aside>
 
           <div className="flex-1 min-w-0">
-            <ResourceGrid
-              resources={filtered}
-              isLoading={isLoading}
-              onSelect={handleSelect}
-            />
-            <ExternalCatalogPanel query={debouncedSearch} tipos={tipos} canImport={userCanUpload} />
+            {resourcesQuery.isError ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                No se pudo consultar la biblioteca local. Vuelve a intentarlo.
+              </div>
+            ) : (
+              <ResourceGrid
+                resources={resources}
+                isLoading={resourcesQuery.isLoading}
+                onSelect={handleSelect}
+              />
+            )}
+            {resourcesQuery.hasNextPage && (
+              <div className="mt-6 flex justify-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void resourcesQuery.fetchNextPage()}
+                  disabled={resourcesQuery.isFetchingNextPage}
+                >
+                  {resourcesQuery.isFetchingNextPage ? "Cargando..." : "Cargar más recursos"}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
+        ) : (
+          <ExternalCatalogPanel query={debouncedSearch} tipos={tipos} canImport={userCanUpload} />
+        )}
       </div>
 
       <ResourceDetail
-        resource={selected}
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
+        key={displayedResource?.id ?? "no-resource"}
+        resource={displayedResource}
+        open={isDetailOpen}
+        onOpenChange={handleDetailOpenChange}
       />
     </div>
   )
@@ -167,7 +244,7 @@ function FacetPanel({
   tipos: TipoRecurso[]
   typeFilter: string
   onTypeChange: (v: string) => void
-  cursos: string[]
+  cursos: Curso[]
   cursoFilter: string
   onCursoChange: (v: string) => void
 }) {
@@ -223,15 +300,15 @@ function FacetPanel({
           </button>
           {cursos.map((curso) => (
             <button
-              key={curso}
-              onClick={() => onCursoChange(curso)}
+              key={curso.id}
+              onClick={() => onCursoChange(String(curso.id))}
               className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors cursor-pointer ${
-                cursoFilter === curso
+                cursoFilter === String(curso.id)
                   ? "bg-brand-50 text-brand-700 dark:bg-brand-950/20 dark:text-brand-300 font-medium"
                   : "text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-900/40"
               }`}
             >
-              {curso}
+              {curso.nombre}
             </button>
           ))}
         </div>

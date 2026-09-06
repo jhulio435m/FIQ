@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { useNavigate, useLocation, useSearchParams } from "react-router"
+import { useEffect, useRef, useState } from "react"
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router"
 import axios from "axios"
 import { login, getMicrosoftAuthorizeUrl, microsoftLogin } from "@/services/auth"
 import { useAuthStore } from "@/stores/auth"
@@ -19,18 +19,20 @@ export default function Login() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [msLoading, setMsLoading] = useState(false)
+  const callbackStarted = useRef(false)
 
   const from = (location.state as { from?: string })?.from ?? "/"
 
   useEffect(() => {
     const code = searchParams.get("code")
-    if (code) {
+    if (code && !callbackStarted.current) {
+      callbackStarted.current = true
       const handleMsCallback = async () => {
         setMsLoading(true)
         setError("")
         try {
           const redirectUri = window.location.origin + "/login"
-          const res = await microsoftLogin(code, redirectUri)
+          const res = await microsoftLogin(code, redirectUri, searchParams.get("state") ?? "")
           setAuth(res.usuario, res.access_token)
           navigate(from, { replace: true })
         } catch (err: unknown) {
@@ -123,6 +125,9 @@ export default function Login() {
                     required
                   />
                 </div>
+                <Link className="block text-right text-sm text-brand-700 hover:underline" to="/recuperar-contrasena">
+                  ¿Olvidaste tu contraseña?
+                </Link>
                 <Button type="submit" className="w-full bg-brand-500 hover:bg-brand-600 cursor-pointer" disabled={loading}>
                   {loading ? "Ingresando..." : "Ingresar"}
                 </Button>

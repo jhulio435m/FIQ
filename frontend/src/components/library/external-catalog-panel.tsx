@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { AlertCircle, BookOpen, ExternalLink, FileSearch, Loader2, Plus, RefreshCcw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button-variants"
 import { Card } from "@/components/ui/card"
 import {
   importExternalResource,
@@ -11,6 +12,7 @@ import {
   type ExternalWork,
 } from "@/services/external-catalog"
 import { toast } from "sonner"
+import { ExternalCoverImage } from "./external-cover-image"
 
 import type { TipoRecurso } from "@/services/resources"
 
@@ -31,8 +33,12 @@ const providerNames: Record<string, string> = {
 }
 
 function findTypeId(tipos: TipoRecurso[], work: ExternalWork) {
-  const normalized = work.resource_type.includes("book") ? "libro" : "tesis"
-  const preferred = tipos.find((tipo) => tipo.nombre.toLowerCase().includes(normalized))
+  const preferredNames = work.resource_type.includes("book")
+    ? ["libro"]
+    : ["artículo", "articulo", "tesis"]
+  const preferred = preferredNames
+    .map((name) => tipos.find((tipo) => tipo.nombre.toLowerCase().includes(name)))
+    .find((tipo) => tipo !== undefined)
   return preferred?.id ?? tipos[0]?.id ?? 1
 }
 
@@ -50,6 +56,7 @@ export function ExternalCatalogPanel({ query, tipos, canImport }: ExternalCatalo
   const queryClient = useQueryClient()
   const cleanQuery = query.trim()
   const isEnabled = cleanQuery.length >= 3
+  const looksLikeDoi = /^10\.\d{4,9}\//i.test(cleanQuery)
 
   const searchQuery = useQuery({
     queryKey: ["external-catalog", mode, cleanQuery],
@@ -57,7 +64,9 @@ export function ExternalCatalogPanel({ query, tipos, canImport }: ExternalCatalo
     queryFn: () =>
       mode === "books"
         ? searchExternalBooks({ q: cleanQuery, limit: 6 })
-        : searchExternalArticles({ q: cleanQuery, limit: 6 }),
+        : searchExternalArticles(looksLikeDoi
+          ? { doi: cleanQuery, limit: 6 }
+          : { q: cleanQuery, limit: 6 }),
     staleTime: 1000 * 60 * 15,
   })
 
@@ -71,15 +80,20 @@ export function ExternalCatalogPanel({ query, tipos, canImport }: ExternalCatalo
         resumen: work.summary,
         autores: work.authors.join(", ") || null,
         editorial: work.publisher,
-        doi: work.doi ?? work.isbn,
+        doi: work.doi,
+        isbn: work.isbn,
         anio: work.published_year,
         external_url: work.external_url,
         open_access_url: work.open_access_url,
         cover_url: work.cover_url,
+        idioma: work.language,
+        licencia: work.license,
+        temas: work.subjects,
       }),
     onSuccess: (resource) => {
       toast.success("Recurso externo importado para revisión")
       queryClient.invalidateQueries({ queryKey: ["resources"] })
+      queryClient.invalidateQueries({ queryKey: ["resource-catalog"] })
       queryClient.invalidateQueries({ queryKey: ["external-catalog"] })
       queryClient.invalidateQueries({ queryKey: ["pending-resources"] })
       void resource
@@ -176,18 +190,7 @@ export function ExternalCatalogPanel({ query, tipos, canImport }: ExternalCatalo
           {results.map((work) => (
             <Card key={`${work.source}-${work.external_id}`} className="p-4">
               <div className="flex gap-3">
-                {work.cover_url ? (
-                  <img
-                    src={work.cover_url}
-                    alt=""
-                    className="h-20 w-14 shrink-0 rounded border border-gray-200 object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="flex h-20 w-14 shrink-0 items-center justify-center rounded border border-gray-200 bg-gray-50 text-gray-400">
-                    <BookOpen className="h-5 w-5" />
-                  </div>
-                )}
+                <ExternalCoverImage src={work.cover_url} title={work.title} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{providerNames[work.source] ?? work.source}</Badge>
@@ -200,17 +203,15 @@ export function ExternalCatalogPanel({ query, tipos, canImport }: ExternalCatalo
                   )}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(work.open_access_url || work.external_url) && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        render={
-                          <a href={work.open_access_url ?? work.external_url ?? "#"} target="_blank" rel="noreferrer">
-                            <ExternalLink className="h-4 w-4" />
-                            Ver fuente
-                          </a>
-                        }
-                      />
+                      <a
+                        className={buttonVariants({ variant: "outline", size: "sm" })}
+                        href={work.open_access_url ?? work.external_url ?? "#"}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Ver fuente
+                      </a>
                     )}
                     {canImport && (
                       <Button

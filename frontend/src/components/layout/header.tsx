@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query"
 import { getPendingResources } from "@/services/resources"
 import { ModeToggle } from "@/components/mode-toggle"
 import { isAdmin as checkIsAdmin } from "@/lib/auth"
+import { toast } from "sonner"
 
 export function Header() {
   const { user, logout, isAuthenticated } = useAuthStore()
@@ -29,6 +30,9 @@ export function Header() {
           <Link to="/" className="hover:text-brand-200 dark:hover:text-brand-300 transition">Inicio</Link>
           <Link to="/biblioteca" className="hover:text-brand-200 dark:hover:text-brand-300 transition">Biblioteca</Link>
           <Link to="/laboratorios" className="hover:text-brand-200 dark:hover:text-brand-300 transition">Laboratorios</Link>
+          {isAuthenticated() && (
+            <Link to="/mi-biblioteca" className="hover:text-brand-200 dark:hover:text-brand-300 transition">Mi biblioteca</Link>
+          )}
           {isAdmin && (
             <Link to="/admin" className="hover:text-brand-200 dark:hover:text-brand-300 transition">Panel Admin</Link>
           )}
@@ -53,7 +57,9 @@ export function Header() {
                 <User className="h-4 w-4" />
                 <span className="hidden sm:inline">{user?.nombre}</span>
               </Link>
-              <Button variant="ghost" size="icon-sm" onClick={logout} className="hover:bg-white/10 text-white">
+              <Button aria-label="Cerrar sesión" variant="ghost" size="icon-sm" onClick={() => {
+                void logout().catch(() => toast.error("No se pudo cerrar la sesión. Intenta nuevamente."))
+              }} className="hover:bg-white/10 text-white">
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
@@ -67,4 +73,3 @@ export function Header() {
     </header>
   )
 }
-

@@ -10,13 +10,13 @@ Revision ejecutada contra la documentacion `docs/01` a `docs/07`, `README.md`, `
 | :--- | :--- | :--- |
 | Monorepo y tooling | Implementado | `package.json`, `frontend/package.json`, `backend/pyproject.toml`, hooks Husky y commitlint. |
 | Backend FastAPI | Implementado con deuda menor | Routers activos para auth, users, resources, labs, activity y reports. |
-| Frontend React | Implementado con deuda de pruebas unitarias | Rutas para home, login, biblioteca, laboratorios, perfil y admin. |
+| Frontend React | Implementado y cubierto por pruebas unitarias | Rutas para home, login, biblioteca, laboratorios, perfil y admin. |
 | Docker Compose local | Implementado | Servicios backend, frontend, postgres, redis y minio. PostgreSQL expuesto en `5433`. |
 | CI base | Implementado | `.github/workflows/ci.yml` ejecuta backend tests, lint, build y Playwright. |
-| Biblioteca digital | Implementada | Search, tipos, cursos, detalle, preview PDF, upload, tracking y moderacion. |
-| Laboratorios | Implementado como catalogo | Lista y detalle de modulos; falta experiencia interactiva real por modulo. |
+| Biblioteca digital | Implementada | Un buscador con toggle Local/APIs, paginación, tipos, cursos, detalle PDF/externo, upload, tracking y moderación. |
+| Laboratorios | Implementado con simuladores interactivos | Registro aislado de destilación, cinética, termodinámica y reactores. |
 | Auditoria y reportes | Implementacion inicial | Logs y reportes agregados disponibles para Admin. |
-| Infra productiva | Parcial | Existe `render.yaml`; faltan manifiestos Kubernetes, Cloudflare Tunnel, backup y observabilidad reales. |
+| Infra productiva | Declarativa y validada en render; runtime remoto pendiente | Compose local saludable; Kubernetes, dominio y HA remoto requieren credenciales/cluster accesibles. |
 
 ## Brechas cerradas en esta revision
 
@@ -33,35 +33,35 @@ Revision ejecutada contra la documentacion `docs/01` a `docs/07`, `README.md`, `
 
 | ID | Brecha | Impacto | Siguiente accion |
 | :--- | :--- | :--- | :--- |
-| P0-01 | Ejecutar suite completa despues de cada cambio: pytest, lint, build, Playwright y Compose. | Sin evidencia actualizada no se puede declarar release candidate. | Mantener checklist: `uv run --extra dev pytest`, `npm run lint`, `npm run build`, `npm run test:e2e`, `docker compose up -d --build`. |
-| P0-02 | Verificar OpenAPI contra `docs/05_especificacion_api.md`. | Riesgo de documentacion desalineada con contratos reales. | Exportar `/openapi.json` y comparar endpoints, payloads y codigos de error. |
-| P0-03 | Completar pruebas negativas de seguridad de upload. | Riesgo de aceptar archivos malformados o roles incorrectos. | Pytest para MIME, magic number, tamano maximo, 401/403 y archivo no PDF. |
+| P0-01 | Ejecutar Playwright y Compose en un host con Docker activo. | El código puede pasar pruebas aisladas sin probar el flujo integrado real. | Levantar el stack, sembrar datos y ejecutar `npm run test:e2e`. |
+| P0-02 | Validar despliegue Kubernetes en staging y producción reales. | Renderizar manifiestos no demuestra disponibilidad ni persistencia. | Aplicar overlays, revisar probes, PVC, túneles y restauración. |
 
 ### P1 - Calidad de producto
 
 | ID | Brecha | Impacto | Siguiente accion |
 | :--- | :--- | :--- | :--- |
-| P1-01 | No hay Vitest/RTL ni MSW configurados aunque la estrategia lo exige. | El frontend depende casi totalmente de E2E. | Agregar Vitest, RTL, jest-dom, MSW y pruebas de login, biblioteca, upload-dialog y admin. |
-| P1-02 | Los E2E no usan Page Object Model. | Selectores y flujos pueden duplicarse o volverse fragiles. | Introducir `frontend/e2e/pages/` y helpers compartidos para login, biblioteca, admin y perfil. |
-| P1-03 | Reportes y actividad tienen UI basica. | Admin tiene visibilidad parcial del uso real. | Agregar filtros por fecha, usuario, accion y estados vacios/error/loading. |
-| P1-04 | Laboratorios son catalogo, no simuladores interactivos. | El valor educativo esta incompleto. | Implementar al menos un modulo interactivo real y registrar `lab_access` desde detalle. |
+| P1-01 | Redis y el endpoint JWT deben compartir el límite entre réplicas. | Un límite por proceso permite evadirlo. | Cerrado: limiter Redis con ventana atómica, proxy confiable y dependencia en `/auth/jwt/login`. |
+| P1-02 | Recuperación de contraseña necesita proveedor institucional operativo. | Sin SMTP configurado no se entrega el enlace. | Cerrado en código: SMTP sin registrar tokens, pantalla `/recuperar-contrasena`; falta cargar secretos y probar entrega. |
+| P1-05 | Contadores de vistas/descargas sufrían lost updates bajo concurrencia y el archivo se cargaba completo en RAM. | Estadísticas incorrectas y picos de memoria con PDFs de 20 MB. | Cerrado: `UPDATE contador = contador + 1` y `StreamingResponse` por bloques. |
+| P1-06 | Cargas directas no tenían confirmación antivirus. | Un objeto presigned podía aprobarse sin análisis. | Cerrado: estado `pending`, `complete-upload`, ClamAV TCP, cuarentena y bloqueo de aprobación. |
+| P1-03 | Persisten warnings de React/SQLModel y un chunk cercano a 500 kB. | Deuda de mantenimiento y rendimiento inicial. | Cerrado: chunks divididos bajo 370 kB; llamadas a session.execute migradas a db.exec en toda la aplicación propia. |
+| P1-04 | Los E2E aún usan selectores CSS posicionales en flujos antiguos. | Fragilidad ante cambios visuales. | Migrar gradualmente a roles, labels y fixtures compartidos. |
 
 ### P2 - Produccion e infraestructura
 
 | ID | Brecha | Impacto | Siguiente accion |
 | :--- | :--- | :--- | :--- |
-| P2-01 | Manifiestos Kubernetes aún no implementados; ya existe ruta `infra/k8s/` y plan HA. | No se cumple todavía el destino dev -> Kubernetes prod. | Completar `infra/k8s/` con deployments, services, ingress, configmaps, external secrets y probes. |
-| P2-02 | Cloudflare Tunnel esta documentado, pero no configurado en repo. | Falta evidencia de acceso Zero Trust. | Agregar plantilla `cloudflared` y guia de variables sin secretos. |
-| P2-03 | Backups y restore no estan automatizados. | Riesgo operativo para PostgreSQL y MinIO/S3. | Documentar job de backup, retencion, prueba de restore y versionamiento de bucket. |
-| P2-04 | Observabilidad minima no esta materializada. | No hay trazabilidad operacional de latencia, errores ni disponibilidad. | Agregar health checks extendidos, metricas basicas y logging estructurado centralizable. |
+| P2-01 | Los manifiestos usan imágenes `latest` en varios componentes. | Despliegues no reproducibles. | Fijar tags o digests validados. |
+| P2-02 | Los backups declarados siguen requiriendo ejecución en infraestructura real. | Un backup no restaurable no reduce el riesgo operativo. | Cerrado en scripts: backup PostgreSQL/Mongo/MinIO, checksum y restore lógico opcional protegido; ejecutar en staging y registrar evidencia. |
+| P2-03 | El host actual no tiene capacidad para los PVC productivos declarados. | 500 GiB de documentos + 600 GiB de backups no caben en los 142 GiB libres observados. | Ampliar almacenamiento o provisionar nodos/PV antes de aplicar producción. |
+| P2-04 | No existe cluster staging ni dominio Cloudflare administrado accesible desde este entorno. | No se puede validar probes, HTTPS, alertas ni caída de réplica. | Aplicar overlay en staging real, configurar DNS/túnel nombrado y ejecutar failover autorizado. |
 
 ## Recomendacion de continuidad
 
-1. Cerrar P0 con verificacion completa y pruebas negativas backend.
-2. Agregar Vitest/RTL/MSW para cubrir estados de UI que Playwright no debe absorber.
-3. Refactorizar E2E con Page Objects solo despues de que la suite actual este verde.
-4. Completar manifiestos de `infra/k8s/`, fallback `infra/swarm/` y Cloudflare como siguiente incremento de despliegue, sin subir secretos.
-5. Convertir el primer laboratorio en una simulacion interactiva real para que el modulo deje de ser solo catalogo.
+1. Ejecutar el stack real y Playwright en un host con Docker activo.
+2. Aplicar y verificar staging antes de producción.
+3. Cargar Redis/SMTP/ClamAV y secretos institucionales en staging.
+4. Reducir warnings y deuda de selectores E2E.
 
 ## Skills aplicadas
 

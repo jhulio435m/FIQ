@@ -6,6 +6,18 @@ import api from "@/services/api"
 import { useAuthStore } from "@/stores/auth"
 
 api.defaults.adapter = "fetch"
+// Node 26's native storage can shadow jsdom. Provide isolated browser-like storage.
+const storageValues = new Map<string, string>()
+const testStorage: Storage = {
+  get length() { return storageValues.size },
+  clear: () => storageValues.clear(),
+  getItem: (key) => storageValues.get(key) ?? null,
+  key: (index) => [...storageValues.keys()][index] ?? null,
+  removeItem: (key) => { storageValues.delete(key) },
+  setItem: (key, value) => { storageValues.set(key, String(value)) },
+}
+Object.defineProperty(globalThis, "localStorage", { value: testStorage, configurable: true })
+Object.defineProperty(window, "localStorage", { value: testStorage, configurable: true })
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 

@@ -27,8 +27,8 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_role("Admin")),
 ):
-    result = await db.execute(select(User))
-    return result.scalars().all()
+    result = await db.exec(select(User))
+    return result.all()
 
 
 @router.patch("/{user_id}/role", response_model=UserRead)

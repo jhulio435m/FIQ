@@ -1,23 +1,27 @@
-# PostgreSQL HA con Patroni, etcd y HAProxy
+# PostgreSQL HA con Patroni y HAProxy
 
-Este paquete implementa la pieza que faltaba para alta disponibilidad real de datos SQL:
+Este paquete conserva la línea PostgreSQL HA. En producción Kubernetes, Patroni
+usa Kubernetes DCS sobre el etcd embebido de k3s; el `compose.yaml` queda como
+laboratorio o rollback temporal.
 
 - Patroni controla el lider PostgreSQL y promueve una replica si el lider cae.
-- etcd guarda el consenso del cluster Patroni.
+- Kubernetes DCS guarda el estado del cluster Patroni en producción k3s.
 - HAProxy expone un endpoint estable para la aplicacion.
 
 ## Nodos objetivo
 
-| Nodo | Rol | IP privada |
+| Nodo | Rol | IP Tailscale |
 | --- | --- | --- |
-| `oti` | PostgreSQL + Patroni + etcd + HAProxy | `10.77.0.2` |
-| `ubuntu` | PostgreSQL + Patroni + etcd + HAProxy | `10.77.0.1` |
-| `laptop` | PostgreSQL + Patroni + etcd + HAProxy | `10.77.0.3` |
+| `oti` | PostgreSQL + Patroni + HAProxy | `100.79.244.99` |
+| `abc` | PostgreSQL + Patroni + HAProxy | `100.97.171.89` |
+| `server` | PostgreSQL + Patroni + HAProxy | `100.87.33.2` |
+| `arch` | PostgreSQL + Patroni + HAProxy | `100.110.204.72` |
+| `debian` | PostgreSQL + Patroni + HAProxy | `100.94.200.89` |
 
 La aplicacion debe escribir contra HAProxy, no contra un nodo PostgreSQL directo:
 
 ```text
-postgresql://postgres:<password>@10.77.0.2:5000/fiq_prod
+postgresql://postgres:<password>@100.79.244.99:5000/fiq_prod
 ```
 
 Puertos:
@@ -27,16 +31,15 @@ Puertos:
 - `7000`: dashboard HAProxy.
 - `8008`: API Patroni por nodo.
 - `5432`: PostgreSQL por nodo.
-- `2379-2380`: etcd.
 
-El compose usa `network_mode: host` para evitar problemas de NAT entre Patroni,
-etcd y la red privada WireGuard. Por eso estos puertos deben estar libres en
-cada nodo antes de levantar el cluster.
+En Kubernetes, Patroni y HAProxy usan `hostNetwork` para operar sobre las IP
+Tailscale de cada nodo. El compose heredado usa `network_mode: host` para
+laboratorio y rollback.
 
 ## Flujo de despliegue
 
 1. Crear backup actual de PostgreSQL.
-2. Levantar Patroni/etcd/HAProxy:
+2. Levantar Patroni/HAProxy:
 
 ```bash
 deploy_scripts/deploy_postgres_ha.sh

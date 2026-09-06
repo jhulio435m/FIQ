@@ -12,9 +12,12 @@ if config.config_file_name is not None:
 
 from app.core.config import settings
 from app.models.user import Rol, User
+from app.models.session import RefreshSession
+from app.api.personal_library.models import BibliotecaUsuarioRecurso, ListaBiblioteca, ListaBibliotecaRecurso, MarcadorLectura
 from app.models.resource import Curso, EstadoRecurso, Recurso, RecursoEstadoHistorial, TipoRecurso
 from app.models.lab import NivelDificultad, ModuloLaboratorio
 from app.models.activity import RegistroActividad, TipoActividad
+from app.api.bibliography.models import ArchivoBibliografico, EdicionBibliografica, EdicionISBN, ObraBibliografica
 
 target_metadata = SQLModel.metadata
 

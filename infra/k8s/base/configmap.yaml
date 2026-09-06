@@ -5,8 +5,21 @@ metadata:
   namespace: fiq
 data:
   PROJECT_NAME: FIQ Plataforma Digital
+  ENVIRONMENT: production
+  SESSION_COOKIE_SECURE: "true"
   REDIS_URL: redis://redis:6379/0
-  MONGO_ENABLED: "true"
+  TRUST_PROXY_HEADERS: "true"
+  MONGO_ENABLED: "false"
   MONGO_DB_NAME: fiq_events
   S3_BUCKET_NAME: fiq-recursos
+  S3_QUARANTINE_BUCKET_NAME: fiq-cuarentena
+  S3_ENDPOINT: http://minio:9000
+  CLAMAV_ENABLED: "true"
+  CLAMAV_HOST: clamav
+  CLAMAV_PORT: "3310"
+  CLAMAV_TIMEOUT_SECONDS: "30"
   CORS_ORIGINS: '["https://fiq.example.edu.pe"]'
+  RESOURCE_SHARD_ID_STRIDE: "1000000000"
+  FRONTEND_URL: https://fiq.example.edu.pe
+  SMTP_PORT: "587"
+  SMTP_STARTTLS: "true"

@@ -53,7 +53,12 @@ export function ResourceMetadataPanel({ resource }: Props) {
           <p><span className="font-semibold text-gray-500">Autores:</span> {resource.autores ?? "Facultad de Ingeniería Química - UNCP"}</p>
           {resource.editorial && <p><span className="font-semibold text-gray-500">Revista / Editorial:</span> {resource.editorial}</p>}
           {resource.anio && <p><span className="font-semibold text-gray-500">Año de Publicación:</span> {resource.anio}</p>}
-          {resource.doi && <p><span className="font-semibold text-gray-500">DOI / ISBN:</span> <span className="font-mono text-brand-600 select-all">{resource.doi}</span></p>}
+          {resource.doi && <p><span className="font-semibold text-gray-500">DOI:</span> <span className="font-mono text-brand-600 select-all">{resource.doi}</span></p>}
+          {resource.isbn && <p><span className="font-semibold text-gray-500">ISBN:</span> <span className="font-mono text-brand-600 select-all">{resource.isbn}</span></p>}
+          {resource.idioma && <p><span className="font-semibold text-gray-500">Idioma:</span> {resource.idioma.toUpperCase()}</p>}
+          {resource.temas && <p><span className="font-semibold text-gray-500">Temas:</span> {resource.temas}</p>}
+          {resource.licencia && <p><span className="font-semibold text-gray-500">Licencia:</span> {resource.licencia}</p>}
+          {resource.fuente_externa && <p><span className="font-semibold text-gray-500">Fuente:</span> {resource.fuente_externa}</p>}
         </div>
       </div>
     </>

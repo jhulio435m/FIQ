@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 import uuid
-from sqlmodel import SQLModel
+from sqlmodel import Field, SQLModel
 
 
 class RecursoRead(SQLModel):
@@ -24,7 +24,21 @@ class RecursoRead(SQLModel):
     autores: Optional[str] = None
     editorial: Optional[str] = None
     doi: Optional[str] = None
+    isbn: Optional[str] = None
     anio: Optional[int] = None
+    idioma: Optional[str] = None
+    cover_url: Optional[str] = None
+    licencia: Optional[str] = None
+    temas: Optional[str] = None
+    fuente_externa: Optional[str] = None
+    external_id: Optional[str] = None
+    scan_status: str = "clean"
+    obra_id: Optional[uuid.UUID] = None
+    edicion_id: Optional[uuid.UUID] = None
+    ediciones_disponibles: int = 1
+    archivos_disponibles: int = 1
+    formatos_disponibles: list[str] = Field(default_factory=list)
+    snippet: Optional[str] = None
 
 
 class RecursoCreate(SQLModel):
@@ -38,7 +52,11 @@ class RecursoCreate(SQLModel):
     autores: Optional[str] = None
     editorial: Optional[str] = None
     doi: Optional[str] = None
+    isbn: Optional[str] = None
     anio: Optional[int] = None
+    idioma: Optional[str] = None
+    licencia: Optional[str] = None
+    temas: Optional[str] = None
 
 
 
@@ -68,20 +86,37 @@ class RecursoUpdate(SQLModel):
     autores: Optional[str] = None
     editorial: Optional[str] = None
     doi: Optional[str] = None
+    isbn: Optional[str] = None
     anio: Optional[int] = None
+    idioma: Optional[str] = None
+    cover_url: Optional[str] = None
+    licencia: Optional[str] = None
+    temas: Optional[str] = None
 
 
 class ExternalResourceImport(SQLModel):
-    source: str
-    external_id: str
-    titulo: str
+    source: str = Field(min_length=2, max_length=50)
+    external_id: str = Field(min_length=1, max_length=200)
+    titulo: str = Field(min_length=1, max_length=300)
     tipo_recurso_id: int
-    resumen: Optional[str] = None
+    resumen: Optional[str] = Field(default=None, max_length=5000)
     curso_id: Optional[int] = None
-    autores: Optional[str] = None
-    editorial: Optional[str] = None
-    doi: Optional[str] = None
+    autores: Optional[str] = Field(default=None, max_length=300)
+    editorial: Optional[str] = Field(default=None, max_length=200)
+    doi: Optional[str] = Field(default=None, max_length=200)
+    isbn: Optional[str] = Field(default=None, max_length=64)
     anio: Optional[int] = None
-    external_url: Optional[str] = None
-    open_access_url: Optional[str] = None
-    cover_url: Optional[str] = None
+    external_url: Optional[str] = Field(default=None, max_length=500)
+    open_access_url: Optional[str] = Field(default=None, max_length=500)
+    cover_url: Optional[str] = Field(default=None, max_length=500)
+    idioma: Optional[str] = Field(default=None, max_length=16)
+    licencia: Optional[str] = Field(default=None, max_length=300)
+    temas: list[str] = Field(default_factory=list, max_length=32)
+
+
+class ResourceCatalogPage(SQLModel):
+    items: list[RecursoRead]
+    total: int
+    skip: int
+    limit: int
+    has_more: bool

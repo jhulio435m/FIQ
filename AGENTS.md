@@ -92,6 +92,11 @@ Usar bg-brand-500, text-brand-700, hover:bg-brand-600, etc.
 | farmage/opencode-skills | 66 skills + 9 workflows | `.opencode/skills-collections/opencode-skills/skills` |
 | opencode-skills-collection (npm plugin) | 1000+ | auto-sync via plugin |
 
+### Prioridad de skills
+- Las skills propias en `.opencode/skills` tienen prioridad sobre cualquier skill externa.
+- Las colecciones externas se usan como referencia secundaria solo si no contradicen el stack, rutas, comandos, roles, colores o flujos documentados aquí.
+- Para cierre de trabajo usar `delivery-gate-fiq`; para seguridad usar `security-review-fiq`.
+
 ## Git quality gates (husky hooks)
 - **pre-commit**: `lint-staged` (ESLint en staged .ts/.tsx)
 - **commit-msg**: `commitlint` (Conventional Commits: `type(scope): message`)

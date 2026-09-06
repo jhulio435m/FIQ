@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
+import type { FieldErrors, Resolver } from "react-hook-form"
 import * as z from "zod"
 import {
   Dialog,
@@ -35,6 +35,10 @@ const uploadSchema = z.object({
   autores: z.string().optional(),
   editorial: z.string().optional(),
   doi: z.string().optional(),
+  isbn: z.string().optional(),
+  idioma: z.string().optional(),
+  licencia: z.string().optional(),
+  temas: z.string().optional(),
   anio: z.string().refine((val) => !val || !isNaN(Number(val)), {
     message: "El año debe ser un número válido",
   }).optional(),
@@ -42,6 +46,24 @@ const uploadSchema = z.object({
 
 type UploadFormValues = z.infer<typeof uploadSchema>
 
+const uploadResolver: Resolver<UploadFormValues> = async (values) => {
+  const parsed = uploadSchema.safeParse(values)
+  if (parsed.success) return { values: parsed.data, errors: {} }
+
+  const errors: FieldErrors<UploadFormValues> = {}
+  for (const issue of parsed.error.issues) {
+    const field = issue.path[0]
+    if (
+      field === "titulo" || field === "resumen" || field === "tipo_recurso_id" ||
+      field === "curso_id" || field === "autores" || field === "editorial" ||
+      field === "doi" || field === "isbn" || field === "idioma" ||
+      field === "licencia" || field === "temas" || field === "anio"
+    ) {
+      errors[field] ??= { type: issue.code, message: issue.message }
+    }
+  }
+  return { values: {}, errors }
+}
 
 export function UploadDialog() {
   const [open, setOpen] = useState(false)
@@ -53,7 +75,7 @@ export function UploadDialog() {
   const { data: cursos = [] } = useCourses()
 
   const form = useForm<UploadFormValues>({
-    resolver: zodResolver(uploadSchema),
+    resolver: uploadResolver,
     defaultValues: {
       titulo: "",
       resumen: "",
@@ -62,12 +84,15 @@ export function UploadDialog() {
       autores: "",
       editorial: "",
       doi: "",
+      isbn: "",
+      idioma: "",
+      licencia: "",
+      temas: "",
       anio: "",
     },
   })
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0]
+  const selectFile = (selectedFile: File | undefined) => {
     if (selectedFile) {
       if (selectedFile.type !== "application/pdf") {
         toast.error("Solo se permiten archivos PDF")
@@ -79,6 +104,15 @@ export function UploadDialog() {
       }
       setFile(selectedFile)
     }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    selectFile(e.target.files?.[0])
+  }
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    selectFile(event.dataTransfer.files[0])
   }
 
   const onSubmit = async (values: UploadFormValues) => {
@@ -95,6 +129,10 @@ export function UploadDialog() {
       if (values.autores) formData.append("autores", values.autores)
       if (values.editorial) formData.append("editorial", values.editorial)
       if (values.doi) formData.append("doi", values.doi)
+      if (values.isbn) formData.append("isbn", values.isbn)
+      if (values.idioma) formData.append("idioma", values.idioma)
+      if (values.licencia) formData.append("licencia", values.licencia)
+      if (values.temas) formData.append("temas", values.temas)
       if (values.anio) formData.append("anio", values.anio)
 
       await uploadResource(formData)
@@ -108,6 +146,7 @@ export function UploadDialog() {
         form.reset()
         setFile(null)
         queryClient.invalidateQueries({ queryKey: ["resources"] })
+        queryClient.invalidateQueries({ queryKey: ["resource-catalog"] })
       }, 2000)
 
     } catch (error: unknown) {
@@ -149,11 +188,13 @@ export function UploadDialog() {
         ) : (
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2">
             <div className="space-y-1">
-              <Label htmlFor="file" className="text-brand-700 font-semibold text-xs">Archivo PDF</Label>
+              <Label htmlFor="file-input" className="text-brand-700 font-semibold text-xs">Archivo PDF</Label>
               <div 
                 className={`border-2 border-dashed rounded-lg p-5 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer
                   ${file ? "border-brand-500 bg-brand-50/50" : "border-gray-200 hover:border-brand-400 hover:bg-brand-50/20"}`}
                 onClick={() => document.getElementById("file-input")?.click()}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={handleDrop}
               >
                 <input id="file-input" type="file" accept=".pdf" className="hidden" onChange={handleFileChange} />
                 {file ? (
@@ -188,6 +229,7 @@ export function UploadDialog() {
                     {tipos.map((t) => <SelectItem key={t.id} value={String(t.id)} className="text-xs">{t.nombre}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {form.formState.errors.tipo_recurso_id && <p className="text-xs text-red-500">{form.formState.errors.tipo_recurso_id.message}</p>}
               </div>
 
               <div className="space-y-1">
@@ -221,8 +263,30 @@ export function UploadDialog() {
                 {form.formState.errors.anio && <p className="text-xs text-red-500">{form.formState.errors.anio.message}</p>}
               </div>
               <div className="space-y-1">
-                <Label htmlFor="doi" className="text-brand-700 font-semibold text-xs">DOI / ISBN (Opcional)</Label>
+                <Label htmlFor="doi" className="text-brand-700 font-semibold text-xs">DOI (Opcional)</Label>
                 <Input id="doi" placeholder="ej. 10.1016/j.env.2026" {...form.register("doi")} className="h-9 text-xs" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="isbn" className="text-brand-700 font-semibold text-xs">ISBN (Opcional)</Label>
+                <Input id="isbn" placeholder="ej. 9786120000000" {...form.register("isbn")} className="h-9 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="idioma" className="text-brand-700 font-semibold text-xs">Idioma (Opcional)</Label>
+                <Input id="idioma" placeholder="ej. es" {...form.register("idioma")} className="h-9 text-xs" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="temas" className="text-brand-700 font-semibold text-xs">Temas (Opcional)</Label>
+                <Input id="temas" placeholder="Catálisis, termodinámica" {...form.register("temas")} className="h-9 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="licencia" className="text-brand-700 font-semibold text-xs">Licencia (Opcional)</Label>
+                <Input id="licencia" placeholder="CC BY 4.0" {...form.register("licencia")} className="h-9 text-xs" />
               </div>
             </div>
 

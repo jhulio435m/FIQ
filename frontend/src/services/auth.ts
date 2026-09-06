@@ -3,7 +3,6 @@ import type { Usuario } from "@/types/user"
 
 export interface LoginResponse {
   access_token: string
-  refresh_token: string
   token_type: string
   usuario: Usuario
 }
@@ -14,7 +13,7 @@ export async function login(data: { email: string; password: string }) {
 }
 
 export async function logout() {
-  await api.post("/auth/jwt/logout")
+  await api.post("/auth/logout")
 }
 
 export async function getMicrosoftAuthorizeUrl(redirectUri: string) {
@@ -24,10 +23,19 @@ export async function getMicrosoftAuthorizeUrl(redirectUri: string) {
   return data.url
 }
 
-export async function microsoftLogin(code: string, redirectUri: string) {
+export async function microsoftLogin(code: string, redirectUri: string, state: string) {
   const { data: response } = await api.post<LoginResponse>("/auth/microsoft", {
     code,
     redirect_uri: redirectUri,
+    state,
   })
   return response
+}
+
+export async function requestPasswordReset(email: string) {
+  await api.post("/auth/forgot-password", { email })
+}
+
+export async function resetPassword(token: string, password: string) {
+  await api.post("/auth/reset-password", { token, password })
 }

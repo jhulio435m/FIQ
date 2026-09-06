@@ -8,8 +8,8 @@ _activity_type_cache: dict[str, int] = {}
 
 async def preload_activity_types(db: AsyncSession) -> None:
     """Call this at app startup to populate the cache."""
-    result = await db.execute(select(TipoActividad))
-    tipos = result.scalars().all()
+    result = await db.exec(select(TipoActividad))
+    tipos = result.all()
     for tipo in tipos:
         if tipo.id is not None:
             _activity_type_cache[tipo.nombre] = tipo.id
@@ -18,8 +18,8 @@ async def preload_activity_types(db: AsyncSession) -> None:
 async def get_activity_type_id(db: AsyncSession, nombre: str) -> int | None:
     if nombre in _activity_type_cache:
         return _activity_type_cache[nombre]
-    result = await db.execute(select(TipoActividad).where(TipoActividad.nombre == nombre))
-    tipo = result.scalar_one_or_none()
+    result = await db.exec(select(TipoActividad).where(TipoActividad.nombre == nombre))
+    tipo = result.first()
     if tipo and tipo.id is not None:
         _activity_type_cache[nombre] = tipo.id
         return tipo.id

@@ -3,9 +3,10 @@ from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.external_catalog import router as external_router
+from app.api.auth import router as auth_router
 from app.api.external_catalog.cache import build_cache_key
 from app.api.external_catalog.schemas import ExternalWork
-from app.api.resources import router as resources_router
+from app.api.resources import uploads_router as resources_router
 from app.logs import crud as logs_crud
 from app.reports import router as reports_router
 from app.models.activity import RegistroActividad
@@ -30,8 +31,8 @@ async def login(
 
 
 async def resource_count(db: AsyncSession) -> int:
-    result = await db.execute(select(func.count(Recurso.id)))
-    return result.scalar_one()
+    result = await db.exec(select(func.count(Recurso.id)))
+    return result.one()
 
 
 async def upload_pdf(
@@ -69,7 +70,86 @@ async def test_login_success(client: AsyncClient, db: AsyncSession) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["access_token"]
+    assert "refresh_token" not in payload
+    old_cookie = client.cookies.get("fiq_refresh")
+    assert old_cookie
     assert payload["usuario"]["rol"] == "Admin"
+
+    refresh_response = await client.post(
+        "/auth/refresh",
+        headers={"X-Requested-With": "FIQ"},
+    )
+    assert refresh_response.status_code == 200
+    refreshed = refresh_response.json()
+    assert refreshed["access_token"]
+    assert "refresh_token" not in refreshed
+    assert client.cookies.get("fiq_refresh") != old_cookie
+    assert refreshed["usuario"]["id"] == payload["usuario"]["id"]
+
+
+async def test_refresh_rejects_access_or_invalid_token(client: AsyncClient, db: AsyncSession) -> None:
+    await seed_reference_data(db)
+    response = await client.post(
+        "/auth/login",
+        json={"email": "admin@fiq.uncp.edu.pe", "password": "password123"},
+    )
+
+    access_token = response.json()["access_token"]
+    client.cookies.clear()
+    access_response = await client.post("/auth/refresh", headers={"X-Requested-With": "FIQ", "Cookie": f"fiq_refresh={access_token}"})
+    invalid_response = await client.post("/auth/refresh", headers={"X-Requested-With": "FIQ", "Cookie": "fiq_refresh=invalid"})
+
+    assert access_response.status_code == 401
+    assert invalid_response.status_code == 401
+
+
+async def test_login_rate_limit_returns_429(client: AsyncClient, db: AsyncSession) -> None:
+    await seed_reference_data(db)
+    previous_limit = auth_router.auth_rate_limiter.requests
+    auth_router.auth_rate_limiter.requests = 2
+    try:
+        for _ in range(2):
+            response = await client.post(
+                "/auth/login",
+                json={"email": "admin@fiq.uncp.edu.pe", "password": "wrong"},
+            )
+            assert response.status_code == 401
+        limited = await client.post(
+            "/auth/login",
+            json={"email": "admin@fiq.uncp.edu.pe", "password": "wrong"},
+        )
+        assert limited.status_code == 429
+        assert "Retry-After" in limited.headers
+    finally:
+        auth_router.auth_rate_limiter.requests = previous_limit
+        await auth_router.auth_rate_limiter.clear()
+
+
+async def test_generated_jwt_login_uses_same_rate_limit(client: AsyncClient) -> None:
+    previous_limit = auth_router.auth_rate_limiter.requests
+    auth_router.auth_rate_limiter.requests = 1
+    try:
+        first = await client.post(
+            "/auth/jwt/login",
+            data={"username": "nobody@fiq.uncp.edu.pe", "password": "wrong"},
+        )
+        limited = await client.post(
+            "/auth/jwt/login",
+            data={"username": "nobody@fiq.uncp.edu.pe", "password": "wrong"},
+        )
+        assert first.status_code == 400
+        assert limited.status_code == 429
+    finally:
+        auth_router.auth_rate_limiter.requests = previous_limit
+        await auth_router.auth_rate_limiter.clear()
+
+
+async def test_metrics_endpoint_exposes_http_counters(client: AsyncClient) -> None:
+    await client.get("/health")
+    response = await client.get("/metrics")
+    assert response.status_code == 200
+    assert "fiq_http_requests_total" in response.text
+    assert 'path="/health"' in response.text
 
 
 async def test_login_wrong_password(client: AsyncClient, db: AsyncSession) -> None:
@@ -94,6 +174,8 @@ async def test_resources_public_search_and_types(client: AsyncClient, db: AsyncS
             subido_por=ids["teacher_id"],
             estado_id=2,
             curso_id=1,
+            autores="María Quispe",
+            doi="10.1000/balance",
         )
     )
     await db.commit()
@@ -108,6 +190,123 @@ async def test_resources_public_search_and_types(client: AsyncClient, db: AsyncS
     assert len(resources) == 1
     assert resources[0]["tipo_recurso_nombre"] == "Libro"
     assert resources[0]["curso_nombre"] == "Química General"
+
+    for term in ["María Quispe", "Química General", "10.1000/balance", "Libro"]:
+        metadata_search = await client.get("/resources", params={"search": term})
+        assert metadata_search.status_code == 200
+        assert len(metadata_search.json()) == 1
+
+
+async def test_resources_fulltext_search_and_snippet(client: AsyncClient, db: AsyncSession) -> None:
+    ids = await seed_reference_data(db)
+    db.add(
+        Recurso(
+            titulo="Termodinámica Aplicada",
+            resumen="Introducción a la termodinámica química",
+            url_archivo="resources/termo.pdf",
+            archivo_size=2048,
+            archivo_mime="application/pdf",
+            tipo_recurso_id=1,
+            subido_por=ids["teacher_id"],
+            estado_id=2,
+            curso_id=1,
+            contenido_texto="Se analiza el ciclo de Carnot y los principios de entropía en sistemas cerrados y abiertos con transferencia de calor.",
+        )
+    )
+    await db.commit()
+
+    # Search for term appearing ONLY in contenido_texto
+    res = await client.get("/resources", params={"search": "entropía"})
+    assert res.status_code == 200
+    items = res.json()
+    assert len(items) == 1
+    assert items[0]["titulo"] == "Termodinámica Aplicada"
+    assert items[0]["snippet"] is not None
+    assert "entropía" in items[0]["snippet"].lower()
+
+
+async def test_catalog_returns_total_global_sort_and_public_permalink(
+    client: AsyncClient,
+    db: AsyncSession,
+) -> None:
+    ids = await seed_reference_data(db)
+    resources = [
+        Recurso(
+            titulo="Zinc industrial",
+            resumen="Metalurgia",
+            url_archivo="resources/zinc.pdf",
+            archivo_size=1024,
+            archivo_mime="application/pdf",
+            tipo_recurso_id=1,
+            subido_por=ids["teacher_id"],
+            estado_id=2,
+            curso_id=1,
+            visualizaciones=4,
+            isbn="9786120000001",
+            temas="metalurgia, zinc",
+        ),
+        Recurso(
+            titulo="Ácidos y bases",
+            resumen="Química general",
+            url_archivo="resources/acidos.pdf",
+            archivo_size=1024,
+            archivo_mime="application/pdf",
+            tipo_recurso_id=1,
+            subido_por=ids["teacher_id"],
+            estado_id=2,
+            curso_id=1,
+            visualizaciones=30,
+        ),
+        Recurso(
+            titulo="Documento pendiente",
+            resumen="No debe ser público",
+            url_archivo="resources/pending.pdf",
+            archivo_size=1024,
+            archivo_mime="application/pdf",
+            tipo_recurso_id=1,
+            subido_por=ids["teacher_id"],
+            estado_id=1,
+            curso_id=1,
+        ),
+    ]
+    db.add_all(resources)
+    await db.commit()
+    for resource in resources:
+        await db.refresh(resource)
+
+    response = await client.get(
+        "/resources/catalog",
+        params={"sort": "views", "limit": 1},
+    )
+
+    assert response.status_code == 200
+    page = response.json()
+    assert page["total"] == 2
+    assert page["has_more"] is True
+    assert page["items"][0]["titulo"] == "Ácidos y bases"
+
+    isbn_search = await client.get(
+        "/resources/catalog",
+        params={"search": "9786120000001"},
+    )
+    assert isbn_search.status_code == 200
+    assert isbn_search.json()["items"][0]["titulo"] == "Zinc industrial"
+
+    public_detail = await client.get(f"/resources/{resources[0].id}")
+    pending_detail = await client.get(f"/resources/{resources[2].id}")
+    pending_url = await client.get(f"/resources/{resources[2].id}/url")
+    pending_view = await client.post(f"/resources/{resources[2].id}/view")
+    student_token = await login(client, "estudiante@fiq.uncp.edu.pe")
+    pending_download = await client.post(
+        f"/resources/{resources[2].id}/download",
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    assert public_detail.status_code == 200
+    assert public_detail.json()["isbn"] == "9786120000001"
+    assert pending_detail.status_code == 404
+    assert pending_url.status_code == 404
+    assert pending_view.status_code == 404
+    assert pending_download.status_code == 404
 
 
 async def test_admin_can_list_pending_resources(client: AsyncClient, db: AsyncSession) -> None:
@@ -231,10 +430,10 @@ async def test_upload_rejects_invalid_files_and_does_not_create_metadata(
 
     assert calls == []
 
-    activity_result = await db.execute(select(RegistroActividad))
+    activity_result = await db.exec(select(RegistroActividad))
     rejected = [
         activity
-        for activity in activity_result.scalars().all()
+        for activity in activity_result.all()
         if activity.detalle_accion and activity.detalle_accion.get("resultado") == "fallido"
     ]
     assert len(rejected) == len(cases)
@@ -283,8 +482,8 @@ async def test_activity_log_dual_writes_to_sql_and_mongo_document(
     )
 
     assert activity.id is not None
-    activity_result = await db.execute(select(RegistroActividad))
-    assert len(activity_result.scalars().all()) == 1
+    activity_result = await db.exec(select(RegistroActividad))
+    assert len(activity_result.all()) == 1
 
     assert len(inserted_documents) == 1
     document = inserted_documents[0]
@@ -469,6 +668,49 @@ async def test_external_article_search_persists_mongo_cache_after_provider_query
     assert cached["response"].results[0].doi == "10.1234/catalisis"
 
 
+async def test_external_article_search_deduplicates_same_doi_across_providers(
+    client: AsyncClient,
+    monkeypatch,
+) -> None:
+    async def no_cached(key: str):
+        return None
+
+    async def no_cache_write(**kwargs):
+        return None
+
+    async def crossref(*args, **kwargs):
+        return [ExternalWork(
+            source="crossref",
+            external_id="10.1234/shared",
+            resource_type="article",
+            title="Artículo compartido",
+            doi="10.1234/shared",
+        )]
+
+    async def openalex(*args, **kwargs):
+        return [ExternalWork(
+            source="openalex",
+            external_id="W123",
+            resource_type="academic_work",
+            title="Artículo compartido",
+            doi="https://doi.org/10.1234/shared",
+        )]
+
+    async def unpaywall(*args, **kwargs):
+        return [], None
+
+    monkeypatch.setattr(external_router, "get_cached_external_search", no_cached)
+    monkeypatch.setattr(external_router, "set_cached_external_search", no_cache_write)
+    monkeypatch.setattr(external_router, "search_crossref", crossref)
+    monkeypatch.setattr(external_router, "search_openalex", openalex)
+    monkeypatch.setattr(external_router, "search_unpaywall", unpaywall)
+
+    response = await client.get("/external/search/articles", params={"q": "catalisis"})
+
+    assert response.status_code == 200
+    assert len(response.json()["results"]) == 1
+
+
 async def test_teacher_can_import_external_resource_as_pending_and_doi_is_unique(
     client: AsyncClient,
     db: AsyncSession,
@@ -485,7 +727,12 @@ async def test_teacher_can_import_external_resource_as_pending_and_doi_is_unique
         "autores": "Ada Perez, Luis Gomez",
         "editorial": "Journal of Catalysis",
         "doi": "10.1234/test",
+        "isbn": "978-612-000-000-2",
         "anio": 2025,
+        "idioma": "es",
+        "licencia": "CC BY 4.0",
+        "temas": ["catálisis", "ingeniería química"],
+        "cover_url": "https://covers.openlibrary.org/b/isbn/9786120000002-M.jpg",
         "external_url": "https://doi.org/10.1234/test",
     }
     response = await client.post(
@@ -500,6 +747,12 @@ async def test_teacher_can_import_external_resource_as_pending_and_doi_is_unique
     assert created["archivo_mime"] == "text/html"
     assert created["url_archivo"] == "https://doi.org/10.1234/test"
     assert "Fuente externa: crossref" in created["resumen"]
+    assert created["doi"] == "10.1234/test"
+    assert created["isbn"] == "9786120000002"
+    assert created["idioma"] == "es"
+    assert created["licencia"] == "CC BY 4.0"
+    assert created["temas"] == "catálisis, ingeniería química"
+    assert created["fuente_externa"] == "crossref"
 
     duplicate = await client.post(
         "/resources/import-external",
@@ -529,6 +782,38 @@ async def test_external_import_rejects_student_role(
     )
 
     assert response.status_code == 403
+
+
+async def test_external_import_rejects_unknown_source_and_unsafe_url(
+    client: AsyncClient,
+    db: AsyncSession,
+) -> None:
+    await seed_reference_data(db)
+    token = await login(client, "docente@fiq.uncp.edu.pe")
+    headers = {"Authorization": f"Bearer {token}"}
+    base_payload = {
+        "external_id": "external-unsafe",
+        "titulo": "Recurso externo no confiable",
+        "tipo_recurso_id": 1,
+    }
+
+    unknown_source = await client.post(
+        "/resources/import-external",
+        headers=headers,
+        json={**base_payload, "source": "unknown_provider"},
+    )
+    unsafe_url = await client.post(
+        "/resources/import-external",
+        headers=headers,
+        json={
+            **base_payload,
+            "source": "open_library",
+            "external_url": "javascript:alert(1)",
+        },
+    )
+
+    assert unknown_source.status_code == 422
+    assert unsafe_url.status_code == 422
 
 
 async def test_powerbi_document_metrics_returns_empty_payload_without_mongo(

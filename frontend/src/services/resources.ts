@@ -19,7 +19,20 @@ export interface Recurso {
   autores?: string | null
   editorial?: string | null
   doi?: string | null
+  isbn?: string | null
   anio?: number | null
+  idioma?: string | null
+  cover_url?: string | null
+  licencia?: string | null
+  temas?: string | null
+  fuente_externa?: string | null
+  external_id?: string | null
+  obra_id?: string | null
+  edicion_id?: string | null
+  ediciones_disponibles?: number
+  archivos_disponibles?: number
+  formatos_disponibles?: string[]
+  snippet?: string | null
 }
 
 export interface TipoRecurso {
@@ -35,12 +48,34 @@ export interface Curso {
 export interface SearchParams {
   search?: string
   tipo_recurso_id?: number
+  curso_id?: number
   skip?: number
   limit?: number
+  sort?: CatalogSort
+}
+
+export type CatalogSort = "recent" | "title" | "views" | "downloads"
+
+export interface ResourceCatalogPage {
+  items: Recurso[]
+  total: number
+  skip: number
+  limit: number
+  has_more: boolean
 }
 
 export async function getResources(params: SearchParams = {}) {
   const { data } = await api.get<Recurso[]>("/resources", { params })
+  return data
+}
+
+export async function getResourceCatalog(params: SearchParams = {}) {
+  const { data } = await api.get<ResourceCatalogPage>("/resources/catalog", { params })
+  return data
+}
+
+export async function getResource(id: number) {
+  const { data } = await api.get<Recurso>(`/resources/${id}`)
   return data
 }
 
@@ -101,10 +136,14 @@ export async function updateResource(
     autores?: string | null
     editorial?: string | null
     doi?: string | null
+    isbn?: string | null
     anio?: number | null
+    idioma?: string | null
+    cover_url?: string | null
+    licencia?: string | null
+    temas?: string | null
   }
 ) {
   const { data } = await api.patch<Recurso>(`/resources/${id}`, payload)
   return data
 }
-

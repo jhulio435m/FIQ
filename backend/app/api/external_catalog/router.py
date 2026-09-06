@@ -1,6 +1,6 @@
 from collections.abc import Awaitable, Callable
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
 from app.api.external_catalog.cache import (
     build_cache_key,
@@ -15,8 +15,14 @@ from app.api.external_catalog.clients import (
     search_unpaywall,
 )
 from app.api.external_catalog.schemas import ExternalSearchResponse, ExternalWork
+from app.core.config import settings
+from app.core.rate_limit import build_rate_limiter, client_rate_key
 
 router = APIRouter()
+external_rate_limiter = build_rate_limiter(
+    requests=settings.EXTERNAL_SEARCH_RATE_LIMIT_REQUESTS,
+    window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+)
 
 
 async def _collect(
@@ -33,10 +39,15 @@ async def _collect(
 
 
 def _dedupe(results: list[ExternalWork]) -> list[ExternalWork]:
-    seen: set[tuple[str | None, str, str]] = set()
+    seen: set[tuple[str, str]] = set()
     deduped: list[ExternalWork] = []
     for item in results:
-        key = (item.doi.lower() if item.doi else None, item.source, item.external_id)
+        if item.doi:
+            key = ("doi", item.doi.lower().removeprefix("https://doi.org/"))
+        elif item.isbn:
+            key = ("isbn", item.isbn.replace("-", ""))
+        else:
+            key = (item.source, item.external_id)
         if key in seen:
             continue
         seen.add(key)
@@ -46,10 +57,12 @@ def _dedupe(results: list[ExternalWork]) -> list[ExternalWork]:
 
 @router.get("/search/books", response_model=ExternalSearchResponse)
 async def search_books(
+    request: Request,
     q: str | None = Query(default=None, min_length=2, max_length=120),
     isbn: str | None = Query(default=None, min_length=5, max_length=32),
     limit: int = Query(default=8, ge=1, le=20),
 ):
+    await external_rate_limiter.check(client_rate_key(request, "external-books"))
     cache_params = {"q": q, "isbn": isbn, "limit": limit}
     cache_key = build_cache_key("books", cache_params)
     cached = await get_cached_external_search(cache_key)
@@ -78,10 +91,12 @@ async def search_books(
 
 @router.get("/search/articles", response_model=ExternalSearchResponse)
 async def search_articles(
+    request: Request,
     q: str | None = Query(default=None, min_length=2, max_length=160),
     doi: str | None = Query(default=None, min_length=4, max_length=180),
     limit: int = Query(default=8, ge=1, le=20),
 ):
+    await external_rate_limiter.check(client_rate_key(request, "external-articles"))
     cache_params = {"q": q, "doi": doi, "limit": limit}
     cache_key = build_cache_key("articles", cache_params)
     cached = await get_cached_external_search(cache_key)

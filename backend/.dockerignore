@@ -5,3 +5,8 @@ __pycache__
 test.db
 tmp_test.db
 seed_files
+.env
+.env.*
+tests
+htmlcov
+.coverage

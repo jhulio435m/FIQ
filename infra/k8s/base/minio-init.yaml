@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-init
+  namespace: fiq
+  labels:
+    app.kubernetes.io/name: minio-init
+    app.kubernetes.io/part-of: fiq-platform
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: minio-init
+          image: minio/mc:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - >-
+              until mc alias set fiq http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do sleep 3; done;
+              mc mb --ignore-existing fiq/fiq-recursos;
+              mc mb --ignore-existing fiq/fiq-cuarentena;
+              mc version enable fiq/fiq-recursos
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: fiq-secrets
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: fiq-secrets
+                  key: MINIO_ROOT_PASSWORD

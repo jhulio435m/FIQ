@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.models.resource import Curso, Recurso
 from app.core.seed_base import truncate_all, seed_roles, seed_admin, seed_tipos_recurso, seed_estados_recurso, seed_actividades, seed_niveles, seed_labs
 from app.core.s3 import s3_service
+from app.core.backfill_bibliography import backfill_bibliography
 
 logger = logging.getLogger(__name__)
 
@@ -63,16 +64,19 @@ async def seed():
 
             # Re-fetch admin to avoid detached state
             for path, titulo, t_id, c_id in seed_files:
-                if os.path.exists(path):
-                    key = f"resources/{uuid.uuid4()}_{os.path.basename(path)}"
-                    with open(path, "rb") as f:
-                        body = f.read()
-                    await s3.put_object(
-                        Bucket=settings.S3_BUCKET_NAME,
-                        Key=key,
-                        Body=body,
-                        ContentType="application/pdf"
-                    )
+                if not os.path.exists(path):
+                    logger.warning("Seed file missing, skipping resource: %s", path)
+                    continue
+
+                key = f"resources/{uuid.uuid4()}_{os.path.basename(path)}"
+                with open(path, "rb") as f:
+                    body = f.read()
+                await s3.put_object(
+                    Bucket=settings.S3_BUCKET_NAME,
+                    Key=key,
+                    Body=body,
+                    ContentType="application/pdf"
+                )
                 
                 recurso = Recurso(
                     titulo=titulo,
@@ -87,7 +91,8 @@ async def seed():
                 db.add(recurso)
 
         await db.commit()
-        logger.info("Production-grade real seed completed!")
+        logger.info("Development fixture seed completed")
+    await backfill_bibliography()
 
 if __name__ == "__main__":
     asyncio.run(seed())

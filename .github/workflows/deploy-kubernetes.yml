@@ -6,7 +6,7 @@ on:
       environment:
         description: "Target environment"
         required: true
-        default: "production"
+        default: "staging"
         type: choice
         options:
           - staging
@@ -24,8 +24,53 @@ jobs:
   validate:
     uses: ./.github/workflows/ci.yml
 
-  deploy:
+  images:
     needs: validate
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.backend.outputs.digest }}
+      frontend: ${{ steps.frontend.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        id: backend
+        with:
+          context: backend
+          push: true
+          tags: ghcr.io/jhulio435m/fiq-backend:${{ github.sha }}
+          provenance: true
+          sbom: true
+      - name: Scan backend release image
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        with:
+          image-ref: ghcr.io/jhulio435m/fiq-backend@${{ steps.backend.outputs.digest }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      - uses: docker/build-push-action@v6
+        id: frontend
+        with:
+          context: frontend
+          push: true
+          tags: ghcr.io/jhulio435m/fiq-frontend:${{ github.sha }}
+          provenance: true
+          sbom: true
+      - name: Scan frontend release image
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        with:
+          image-ref: ghcr.io/jhulio435m/fiq-frontend@${{ steps.frontend.outputs.digest }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+  deploy:
+    needs: [validate, images]
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     timeout-minutes: 30
@@ -48,11 +93,19 @@ jobs:
           DEPLOY_KNOWN_HOSTS: ${{ secrets.K8S_KNOWN_HOSTS }}
         run: ./deploy_scripts/github_actions_ssh_setup.sh
 
-      - name: Sync Kubernetes manifests
+      - name: Upload application release script
         run: |
-          ssh fiq-deploy-target "mkdir -p ~/FIQ/infra"
-          scp -r infra/k8s fiq-deploy-target:~/FIQ/infra/
+          scp deploy_scripts/release_kubernetes.sh fiq-deploy-target:/tmp/fiq_release_kubernetes.sh
 
-      - name: Apply Kubernetes manifests
+      - name: Migrate, roll out and verify immutable images
+        env:
+          RELEASE_ENV: ${{ inputs.environment }}
+          BACKEND_DIGEST: ${{ needs.images.outputs.backend }}
+          FRONTEND_DIGEST: ${{ needs.images.outputs.frontend }}
+          PUBLIC_URL: ${{ vars.FIQ_PUBLIC_URL }}
         run: |
-          ssh fiq-deploy-target "cd ~/FIQ && kubectl apply -k infra/k8s/overlays/${{ inputs.environment }}"
+          [[ "$RELEASE_ENV" =~ ^(staging|production)$ ]]
+          [[ "$BACKEND_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "$FRONTEND_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "$PUBLIC_URL" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?$ ]]
+          ssh fiq-deploy-target "bash /tmp/fiq_release_kubernetes.sh '$RELEASE_ENV' 'ghcr.io/jhulio435m/fiq-backend@$BACKEND_DIGEST' 'ghcr.io/jhulio435m/fiq-frontend@$FRONTEND_DIGEST' '$PUBLIC_URL'"

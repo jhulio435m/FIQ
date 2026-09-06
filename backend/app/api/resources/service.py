@@ -14,6 +14,11 @@ async def process_approve_resource(
     user: User,
     request: Request
 ) -> Recurso:
+    if recurso.scan_status != "clean":
+        raise HTTPException(
+            status_code=409,
+            detail="El recurso no puede aprobarse hasta superar el análisis antivirus.",
+        )
     approved_id = await _state_id(db, "Aprobado")
     previous_state = recurso.estado_id
     recurso.estado_id = approved_id

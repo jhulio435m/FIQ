@@ -10,25 +10,26 @@ Kubernetes y Docker Swarm no se deben mezclar como un único plano de control. P
 
 ## Topología Real Seleccionada
 
-El clúster HA se planifica con tres nodos de capacidad suficiente y un watcher externo:
+El clúster HA se opera con cinco nodos de quorum y un watcher externo:
 
-| Nodo | Host | Acceso | Rol previsto | IP privada objetivo |
+| Nodo | Host | Acceso | Rol previsto | Red privada |
 | :--- | :--- | :--- | :--- | :--- |
-| `fiq-node-1` | `100.79.244.99` | `oti@100.79.244.99` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.2` |
-| `fiq-node-2` | `147.224.242.204` | `ubuntu@147.224.242.204` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.1` |
-| `fiq-node-3` | `arch` local | este equipo, Tailscale `100.126.122.28` | Kubernetes server, PostgreSQL, MongoDB | `10.77.0.3` |
-| `fiq-watcher-1` | `167.234.255.122` | `jhulio@167.234.255.122` | Watcher externo, health checks, alertas | `10.77.0.10` opcional |
+| `parrot` | `100.79.244.99` | `oti@100.79.244.99` | k3s server, PostgreSQL HA, Patroni/HAProxy | Tailscale `100.79.244.99` |
+| `abc` | `147.224.242.204` | `ubuntu@147.224.242.204` | k3s server, app, shard, PostgreSQL HA | Tailscale `100.97.171.89` |
+| `server` | `147.15.114.98` | `ubuntu@147.15.114.98` | k3s server, app, shard, PostgreSQL HA | Tailscale `100.87.33.2` |
+| `arch` | host local | este equipo | k3s server, PostgreSQL HA | Tailscale `100.110.204.72` |
+| `debian` | VPS Debian | `jhulio@100.94.200.89` | k3s server, PostgreSQL HA | Tailscale `100.94.200.89` |
+| `ocri` | `167.234.255.122` | `jhulio@167.234.255.122` | Watcher externo y bot Telegram principal | Tailscale `100.122.189.103` |
 
-Esta topología sí permite quorum de 3 miembros para Kubernetes/etcd, Patroni y MongoDB, siempre que el nodo local permanezca encendido y conectado. Si `fiq-node-3` no puede estar disponible de forma estable, el tercer nodo debe moverse a un VPS dedicado.
+Esta topología permite quorum de 5 miembros para Kubernetes/etcd. Patroni usa Kubernetes DCS sobre ese plano de control. `ocri` no participa en quorum; observa desde fuera y mantiene el bot principal por systemd.
 
-`fiq-watcher-1` no debe alojar datos ni control-plane: tiene `sudo`, pero solo cerca de 1 GiB RAM. Su valor es monitoreo externo y alerta temprana.
+`ocri` no debe alojar datos ni control-plane: tiene cerca de 1 GiB RAM. Su valor es monitoreo externo, alerta temprana y bot Telegram.
 
 Estado operativo inicial:
 
-- `fiq-node-1` ya tiene Tailscale y `wireguard-tools`.
-- `fiq-node-2` tiene `sudo` sin contraseña, 4 vCPU, 23 GiB RAM, 45 GiB de disco y WireGuard operativo; pendiente instalar k3s.
-- `fiq-node-3` ya tiene Tailscale y `wireguard-tools`.
-- `fiq-watcher-1` tiene `sudo`, 2 vCPU y 1 GiB RAM; usar solo para watcher.
+- Los cinco nodos de quorum tienen Tailscale operativo.
+- El runtime de producción es k3s HA. Docker Compose queda apagado y solo sirve como rollback manual de emergencia.
+- `ocri` conserva `fiq-telegram-bot.service` como bot principal; no ejecutar otro consumidor de Telegram con el mismo token.
 
 Para pruebas, se evaluó crear una VM dentro de `fiq-node-2`, pero el host no expone virtualización KVM (`vmx/svm = 0`). La alternativa de laboratorio es usar Kubernetes en contenedores con `infra/lab/oti-kubernetes/`, aceptando que no representa alta disponibilidad real.
 
@@ -59,8 +60,8 @@ flowchart TD
 ### Fase 0: Base ya disponible
 
 - `compose.yaml` local con PostgreSQL, MongoDB, Redis, MinIO, backend y frontend.
-- PostgreSQL HA desplegado y validado con Patroni/etcd/HAProxy en `ha-database/` sobre WireGuard. Ultimo check operativo: `oti` (`10.77.0.2`) como primario, `ubuntu` (`10.77.0.1`) y `laptop` (`10.77.0.3`) como replicas en streaming.
-- MongoDB documental para `activity_events` y `external_catalog_cache`.
+- PostgreSQL HA definido para Kubernetes con `patroni` y `postgres-haproxy` como `DaemonSet` sobre los cinco nodos etiquetados `fiq.uncp.edu.pe/postgres-ha=true`; Patroni usa Kubernetes DCS y no un `postgres-etcd` separado.
+- MongoDB documental queda desactivado en el runtime Kubernetes actual hasta reintroducirlo con operador o servicio gestionado.
 - API para Power BI y Looker Studio/Data Studio con `/reports/public/*` protegida por `DASHBOARD_API_KEY`.
 
 ### Fase 1: Hardening de Configuración
@@ -86,16 +87,29 @@ Objetivo: replica set de 3 miembros en nodos distintos.
 
 ### Fase 3: PostgreSQL HA
 
-Mantener Patroni/etcd/HAProxy como línea base:
+Mantener Patroni/HAProxy como línea base en Kubernetes:
 
-- 3 nodos PostgreSQL sobre `10.77.0.1`, `10.77.0.2`, `10.77.0.3`.
-- 3 nodos etcd o servicio equivalente estable sobre los mismos hosts.
+- 5 nodos PostgreSQL sobre las IP Tailscale actuales.
+- 5 nodos k3s server con etcd embebido para quorum del plano de control.
+- Patroni usando Kubernetes DCS para elección de líder PostgreSQL.
 - HAProxy o PgBouncer para entrada estable.
 - Backups base + WAL archiving.
 - Restore test documentado.
 - Métricas de replicación, lag y failover.
 
 El criterio operativo es que el backend use el endpoint de HAProxy `:5000`, no un PostgreSQL fijo. Si cae el lider, Patroni promueve una replica y HAProxy redirige escrituras al nuevo lider; el usuario puede notar unos segundos de reconexion, pero no una perdida sostenida de acceso.
+
+Para distribuir carga SQL transaccional, el backend separa conexiones:
+
+- `DATABASE_URL`: endpoint de escritura HAProxy `:5000`, usado por autenticacion, uploads, moderacion, contadores y auditoria.
+- `DATABASE_READ_URL`: endpoint de lectura HAProxy `:5001`, usado por listados publicos, laboratorios sin auditoria y reportes SQL.
+- Si `DATABASE_READ_URL` no se define, las lecturas usan `DATABASE_URL` para conservar compatibilidad local.
+
+Para carga masiva de biblioteca/recursos, el runtime Kubernetes usa sharding real:
+
+- `resource-shard`: `StatefulSet` PostgreSQL con 2 replicas/shards en nodos app distintos.
+- Distribucion deterministica por `curso_id` para repartir datos y consultas de recursos.
+- Seed de prueba productiva con 50 000 registros, 25 000 por shard.
 
 ### Fase 4: Kubernetes
 

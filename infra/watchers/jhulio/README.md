@@ -11,7 +11,20 @@
 - Enviar alerta por webhook o Telegram si se configura.
 - Responder `/status` por Telegram con estado resumido del watcher.
 
-## Instalación manual
+## Instalacion Docker
+
+```bash
+cp watcher.env.example watcher.env
+docker compose up -d --build
+docker compose ps
+docker compose exec watcher /opt/fiq-watcher/watch_fiq_endpoints.sh /etc/fiq-watcher/watcher.env
+docker compose exec watcher cat /var/lib/fiq-watcher/fiq-watcher.prom
+```
+
+El servicio `watcher` ejecuta los chequeos cada `FIQ_WATCHER_INTERVAL_SECONDS`.
+El servicio `telegram-bot` queda en espera si `TELEGRAM_BOT_TOKEN` esta vacio; al agregar el token en `watcher.env`, reiniciar con `docker compose restart telegram-bot`.
+
+## Instalación manual con systemd
 
 ```bash
 sudo useradd --system --home /nonexistent --shell /usr/sbin/nologin fiq-watcher

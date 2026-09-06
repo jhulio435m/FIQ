@@ -21,7 +21,14 @@ export const mockResources = [
     autores: "FIQ UNCP",
     editorial: "FIQ",
     doi: null,
+    isbn: null,
     anio: 2026,
+    idioma: "es",
+    cover_url: null,
+    licencia: "Uso institucional",
+    temas: "Balance de materia",
+    fuente_externa: null,
+    external_id: null,
   },
 ]
 
@@ -43,6 +50,7 @@ const externalBooksHandler = () => HttpResponse.json({
       external_url: "https://openlibrary.org/works/OL123W",
       open_access_url: null,
       license: null,
+      language: "es",
       subjects: ["Termodinámica"],
     },
   ],
@@ -79,6 +87,20 @@ export const handlers = [
       : mockResources
     return HttpResponse.json(resources)
   }),
+  http.get("/api/resources/catalog", ({ request }) => {
+    const url = new URL(request.url)
+    const search = url.searchParams.get("search")?.toLowerCase()
+    const resources = search
+      ? mockResources.filter((resource) => resource.titulo.toLowerCase().includes(search))
+      : mockResources
+    return HttpResponse.json({
+      items: resources,
+      total: resources.length,
+      skip: Number(url.searchParams.get("skip") ?? 0),
+      limit: Number(url.searchParams.get("limit") ?? 20),
+      has_more: false,
+    })
+  }),
   http.post("/api/resources", () => HttpResponse.json(mockResources[0], { status: 201 })),
   http.post("/api/resources/import-external", () => HttpResponse.json({
     ...mockResources[0],
@@ -97,6 +119,79 @@ export const handlers = [
   http.get("http://localhost/api/external/search/articles", externalArticlesHandler),
   http.get("http://localhost/external/search/articles", externalArticlesHandler),
   http.get("/api/resources/pending", () => HttpResponse.json(mockResources)),
+  http.get("/api/resources/:id", ({ params }) => {
+    const resource = mockResources.find((item) => item.id === Number(params.id))
+    return resource
+      ? HttpResponse.json(resource)
+      : HttpResponse.json({ detail: "Recurso no encontrado" }, { status: 404 })
+  }),
+  http.get("/api/works/by-resource/:id", ({ params }) => {
+    const resourceId = Number(params.id)
+    const resource = mockResources.find((item) => item.id === resourceId)
+    if (!resource) {
+      return HttpResponse.json({ detail: "Obra no encontrada" }, { status: 404 })
+    }
+    return HttpResponse.json({
+      id: "11111111-1111-4111-8111-111111111111",
+      titulo_canonico: resource.titulo,
+      resumen: resource.resumen,
+      autores: resource.autores,
+      temas: resource.temas,
+      idioma: resource.idioma,
+      created_at: resource.created_at,
+      updated_at: resource.created_at,
+      ediciones: [
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          titulo: resource.titulo,
+          editorial: resource.editorial,
+          anio: resource.anio,
+          idioma: resource.idioma,
+          doi: resource.doi,
+          isbns: [],
+          archivos: [
+            {
+              id: "33333333-3333-4333-8333-333333333333",
+              recurso_id: resource.id,
+              formato: "PDF",
+              mime_type: resource.archivo_mime,
+              tamano: resource.archivo_size,
+            },
+          ],
+        },
+      ],
+    })
+  }),
+  http.get("/api/library/me/resources", () => HttpResponse.json([
+    {
+      recurso: mockResources[0],
+      favorito: true,
+      estado_lectura: "leyendo",
+      progreso_pagina: 18,
+      ultima_lectura: "2026-09-02T10:00:00",
+      updated_at: "2026-09-02T10:00:00",
+    },
+  ])),
+  http.get("/api/library/me/resources/:id", () => HttpResponse.json(null)),
+  http.put("/api/library/me/resources/:id", async ({ request }) => {
+    const body = await request.json() as { favorito: boolean; estado_lectura: string | null; progreso_pagina: number }
+    return HttpResponse.json({ recurso: mockResources[0], ...body, ultima_lectura: null, updated_at: "2026-09-02T10:00:00" })
+  }),
+  http.get("/api/library/me/lists", () => HttpResponse.json([
+    { id: "list-1", nombre: "Termodinámica", descripcion: null, es_publica: false, created_at: "2026-09-02T10:00:00", updated_at: "2026-09-02T10:00:00", recursos: mockResources },
+  ])),
+  http.post("/api/library/me/lists", async ({ request }) => {
+    const body = await request.json() as { nombre: string; es_publica: boolean }
+    return HttpResponse.json({ id: "list-2", descripcion: null, created_at: "2026-09-02T10:00:00", updated_at: "2026-09-02T10:00:00", ...body }, { status: 201 })
+  }),
+  http.delete("/api/library/me/lists/:id", () => new HttpResponse(null, { status: 204 })),
+  http.patch("/api/library/me/lists/:id", async ({ request }) => HttpResponse.json({ id: "list-1", nombre: "Termodinámica", descripcion: null, created_at: "2026-09-02T10:00:00", updated_at: "2026-09-02T10:00:00", ...(await request.json() as { es_publica: boolean }) })),
+  http.post("/api/library/me/lists/:id/resources/:resourceId", () => HttpResponse.json({ id: "list-1", nombre: "Termodinámica", descripcion: null, es_publica: false, created_at: "2026-09-02T10:00:00", updated_at: "2026-09-02T10:00:00", recursos: mockResources })),
+  http.delete("/api/library/me/lists/:id/resources/:resourceId", () => HttpResponse.json({ id: "list-1", nombre: "Termodinámica", descripcion: null, es_publica: false, created_at: "2026-09-02T10:00:00", updated_at: "2026-09-02T10:00:00", recursos: [] })),
+  http.get("/api/library/me/history", () => HttpResponse.json([
+    { id: 1, accion: "view", recurso_id: 1, titulo: "Balance de Materia", fecha_hora: "2026-09-02T10:00:00" },
+  ])),
+  http.delete("/api/library/me/history", () => new HttpResponse(null, { status: 204 })),
   http.patch("/api/resources/:id/approve", () => HttpResponse.json(mockResources[0])),
   http.patch("/api/resources/:id/observe", () => HttpResponse.json({ ...mockResources[0], estado_id: 3 })),
   http.get("/api/reports/most-viewed", () => HttpResponse.json(mockResources)),

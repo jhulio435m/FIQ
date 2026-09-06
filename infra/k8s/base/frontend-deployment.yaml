@@ -23,6 +23,8 @@ spec:
         app.kubernetes.io/name: frontend
         app.kubernetes.io/part-of: fiq-platform
     spec:
+      nodeSelector:
+        fiq.uncp.edu.pe/app: "true"
       containers:
         - name: frontend
           image: ghcr.io/jhulio435m/fiq-frontend:latest

@@ -27,6 +27,7 @@ ha-database/.env.*
 # Secrets and local network material
 privatekey
 publickey
+keys_server/
 wg*.conf
 *.pem
 *.key
@@ -34,6 +35,7 @@ wg*.conf
 # IDE
 .vscode/
 .idea/
+.codex/
 *.swp
 *.swo
 
@@ -52,4 +54,7 @@ external_resources/
 frontend/test-results/
 frontend/playwright-report/
 frontend/coverage/
+backend/.coverage
+backend/coverage.xml
+backend/htmlcov/
 *.db

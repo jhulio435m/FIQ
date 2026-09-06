@@ -1,0 +1,348 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-ha-config
+  namespace: fiq
+data:
+  PATRONI_SCOPE: fiq-postgres
+  patroni.yml: |
+    scope: fiq-postgres
+    restapi:
+      listen: 0.0.0.0:8008
+    kubernetes:
+      use_endpoints: true
+      scope_label: cluster-name
+      role_label: role
+      leader_label_value: primary
+      follower_label_value: replica
+      labels:
+        app: fiq-postgres
+      ports:
+        - name: postgres
+          port: 5432
+    bootstrap:
+      dcs:
+        ttl: 30
+        loop_wait: 10
+        retry_timeout: 10
+        maximum_lag_on_failover: 1048576
+        postgresql:
+          use_pg_rewind: true
+          use_slots: true
+          parameters:
+            wal_level: replica
+            hot_standby: "on"
+            wal_keep_size: 512MB
+            max_wal_senders: 10
+            max_replication_slots: 10
+            checkpoint_timeout: 60s
+            max_connections: 200
+      initdb:
+        - encoding: UTF8
+        - data-checksums
+      pg_hba:
+        - host replication replicator 127.0.0.1/32 md5
+        - host replication replicator all md5
+        - host all postgres all md5
+        - host all all all md5
+      users:
+        replicator:
+          options:
+            - replication
+        rewind_user:
+          options:
+            - superuser
+    postgresql:
+      listen: 0.0.0.0:5432
+      data_dir: /home/postgres/pgdata/data
+      bin_dir: /usr/lib/postgresql/17/bin
+      pgpass: /tmp/pgpass
+      authentication:
+        superuser:
+          username: postgres
+        replication:
+          username: replicator
+        rewind:
+          username: rewind_user
+      parameters:
+        unix_socket_directories: '/var/run/postgresql'
+        shared_buffers: 256MB
+        effective_cache_size: 768MB
+        maintenance_work_mem: 64MB
+        log_min_duration_statement: 1000
+        log_connections: "on"
+        log_disconnections: "on"
+  haproxy.cfg: |
+    global
+        maxconn 2000
+        log stdout format raw local0
+
+    defaults
+        log global
+        mode tcp
+        option tcplog
+        timeout connect 5s
+        timeout client 60s
+        timeout server 60s
+
+    frontend postgres_write
+        bind *:5000
+        default_backend postgres_write
+
+    backend postgres_write
+        option httpchk GET /primary
+        http-check expect status 200
+        server parrot 100.79.244.99:5432 maxconn 200 check port 8008
+        server abc 100.97.171.89:5432 maxconn 200 check port 8008
+        server server 100.87.33.2:5432 maxconn 200 check port 8008
+        server arch 100.110.204.72:5432 maxconn 200 check port 8008
+        server debian 100.94.200.89:5432 maxconn 200 check port 8008
+
+    frontend postgres_read
+        bind *:5001
+        default_backend postgres_read
+
+    backend postgres_read
+        option httpchk GET /replica
+        http-check expect status 200
+        balance roundrobin
+        server parrot 100.79.244.99:5432 maxconn 200 check port 8008
+        server abc 100.97.171.89:5432 maxconn 200 check port 8008
+        server server 100.87.33.2:5432 maxconn 200 check port 8008
+        server arch 100.110.204.72:5432 maxconn 200 check port 8008
+        server debian 100.94.200.89:5432 maxconn 200 check port 8008
+
+    listen stats
+        bind *:7000
+        mode http
+        stats enable
+        stats uri /
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: patroni
+  namespace: fiq
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: patroni
+  namespace: fiq
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: patroni
+  namespace: fiq
+subjects:
+  - kind: ServiceAccount
+    name: patroni
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: patroni
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: patroni
+  namespace: fiq
+  labels:
+    app.kubernetes.io/name: patroni
+    app.kubernetes.io/part-of: fiq-platform
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: patroni
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: patroni
+        app.kubernetes.io/part-of: fiq-platform
+        app: fiq-postgres
+        cluster-name: fiq-postgres
+    spec:
+      serviceAccountName: patroni
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        fiq.uncp.edu.pe/postgres-ha: "true"
+      initContainers:
+        - name: init-patroni-data
+          image: fiq-patroni:postgres17
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - mkdir -p /home/postgres/pgdata && chown -R 999:999 /home/postgres/pgdata
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: patroni-data
+              mountPath: /home/postgres/pgdata
+      containers:
+        - name: patroni
+          image: fiq-patroni:postgres17
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PATRONI_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: PATRONI_SCOPE
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-ha-config
+                  key: PATRONI_SCOPE
+            - name: PATRONI_KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: PATRONI_KUBERNETES_USE_ENDPOINTS
+              value: "true"
+            - name: PATRONI_KUBERNETES_SCOPE_LABEL
+              value: cluster-name
+            - name: PATRONI_KUBERNETES_ROLE_LABEL
+              value: role
+            - name: PATRONI_KUBERNETES_LEADER_LABEL_VALUE
+              value: primary
+            - name: PATRONI_KUBERNETES_FOLLOWER_LABEL_VALUE
+              value: replica
+            - name: PATRONI_KUBERNETES_LABELS
+              value: '{app: fiq-postgres}'
+            - name: PATRONI_KUBERNETES_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: PATRONI_KUBERNETES_PORTS
+              value: '[{"name":"postgres","port":5432}]'
+            - name: PATRONI_RESTAPI_LISTEN
+              value: 0.0.0.0:8008
+            - name: PATRONI_RESTAPI_CONNECT_ADDRESS
+              value: $(NODE_IP):8008
+            - name: PATRONI_POSTGRESQL_LISTEN
+              value: 0.0.0.0:5432
+            - name: PATRONI_POSTGRESQL_CONNECT_ADDRESS
+              value: $(NODE_IP):5432
+            - name: PATRONI_SUPERUSER_USERNAME
+              value: postgres
+            - name: PATRONI_SUPERUSER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: fiq-secrets
+                  key: POSTGRES_SUPERUSER_PASSWORD
+            - name: PATRONI_REPLICATION_USERNAME
+              value: replicator
+            - name: PATRONI_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: fiq-secrets
+                  key: POSTGRES_REPLICATION_PASSWORD
+            - name: PATRONI_REWIND_USERNAME
+              value: rewind_user
+            - name: PATRONI_REWIND_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: fiq-secrets
+                  key: POSTGRES_REWIND_PASSWORD
+          ports:
+            - containerPort: 5432
+              name: postgres
+            - containerPort: 8008
+              name: patroni-api
+          readinessProbe:
+            httpGet:
+              path: /readiness
+              port: patroni-api
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /liveness
+              port: patroni-api
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: patroni-config
+              mountPath: /patroni.yml
+              subPath: patroni.yml
+            - name: patroni-data
+              mountPath: /home/postgres/pgdata
+      volumes:
+        - name: patroni-config
+          configMap:
+            name: postgres-ha-config
+        - name: patroni-data
+          hostPath:
+            path: /var/lib/fiq-k8s-ha/patroni
+            type: DirectoryOrCreate
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: postgres-haproxy
+  namespace: fiq
+  labels:
+    app.kubernetes.io/name: postgres-haproxy
+    app.kubernetes.io/part-of: fiq-platform
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres-haproxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres-haproxy
+        app.kubernetes.io/part-of: fiq-platform
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        fiq.uncp.edu.pe/postgres-ha: "true"
+      containers:
+        - name: haproxy
+          image: haproxy:2.9-alpine
+          imagePullPolicy: IfNotPresent
+          args: ["-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+          ports:
+            - containerPort: 5000
+              name: write
+            - containerPort: 5001
+              name: read
+            - containerPort: 7000
+              name: stats
+          readinessProbe:
+            tcpSocket:
+              port: write
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            tcpSocket:
+              port: write
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: haproxy-config
+              mountPath: /usr/local/etc/haproxy/haproxy.cfg
+              subPath: haproxy.cfg
+      volumes:
+        - name: haproxy-config
+          configMap:
+            name: postgres-ha-config

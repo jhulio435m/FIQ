@@ -34,7 +34,11 @@ export function ResourceEditForm({ resource, onCancel, onSave }: Props) {
   const [editAutores, setEditAutores] = useState(resource.autores ?? "")
   const [editEditorial, setEditEditorial] = useState(resource.editorial ?? "")
   const [editDoi, setEditDoi] = useState(resource.doi ?? "")
+  const [editIsbn, setEditIsbn] = useState(resource.isbn ?? "")
   const [editAnio, setEditAnio] = useState(resource.anio ? String(resource.anio) : "")
+  const [editIdioma, setEditIdioma] = useState(resource.idioma ?? "")
+  const [editTemas, setEditTemas] = useState(resource.temas ?? "")
+  const [editLicencia, setEditLicencia] = useState(resource.licencia ?? "")
   const [saving, setSaving] = useState(false)
 
   const handleSaveEdit = async () => {
@@ -52,11 +56,17 @@ export function ResourceEditForm({ resource, onCancel, onSave }: Props) {
         autores: editAutores || null,
         editorial: editEditorial || null,
         doi: editDoi || null,
+        isbn: editIsbn || null,
         anio: editAnio ? Number(editAnio) : null,
+        idioma: editIdioma || null,
+        temas: editTemas || null,
+        licencia: editLicencia || null,
       })
       onSave(updated)
       toast.success("Metadatos actualizados con éxito")
       queryClient.invalidateQueries({ queryKey: ["resources"] })
+      queryClient.invalidateQueries({ queryKey: ["resource-catalog"] })
+      queryClient.invalidateQueries({ queryKey: ["resource", resource.id] })
     } catch (error) {
       toast.error("Error al guardar los cambios")
       console.error("Error saving edits:", error)
@@ -195,13 +205,67 @@ export function ResourceEditForm({ resource, onCancel, onSave }: Props) {
 
             <div className="space-y-1">
               <label className="text-3xs font-semibold text-gray-400 uppercase">
-                DOI / ISBN
+                DOI
               </label>
               <Input
                 value={editDoi}
                 onChange={(e) => setEditDoi(e.target.value)}
                 className="text-xs"
                 placeholder="ej. 10.1016/..."
+                disabled={saving}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-3xs font-semibold text-gray-400 uppercase">
+                ISBN
+              </label>
+              <Input
+                value={editIsbn}
+                onChange={(e) => setEditIsbn(e.target.value)}
+                className="text-xs"
+                placeholder="ej. 9786120000000"
+                disabled={saving}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-3xs font-semibold text-gray-400 uppercase">
+                Idioma
+              </label>
+              <Input
+                value={editIdioma}
+                onChange={(e) => setEditIdioma(e.target.value)}
+                className="text-xs"
+                placeholder="ej. es"
+                disabled={saving}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-3xs font-semibold text-gray-400 uppercase">
+                Temas
+              </label>
+              <Input
+                value={editTemas}
+                onChange={(e) => setEditTemas(e.target.value)}
+                className="text-xs"
+                placeholder="Catálisis, procesos"
+                disabled={saving}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-3xs font-semibold text-gray-400 uppercase">
+                Licencia
+              </label>
+              <Input
+                value={editLicencia}
+                onChange={(e) => setEditLicencia(e.target.value)}
+                className="text-xs"
+                placeholder="CC BY 4.0"
                 disabled={saving}
               />
             </div>

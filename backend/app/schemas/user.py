@@ -1,6 +1,7 @@
 import uuid
 from typing import Optional
 from fastapi_users import schemas
+from pydantic import ConfigDict
 
 
 class UserRead(schemas.BaseUser[uuid.UUID]):
@@ -11,11 +12,10 @@ class UserRead(schemas.BaseUser[uuid.UUID]):
 
 
 class UserCreate(schemas.BaseUserCreate):
+    model_config = ConfigDict(extra="forbid")
     nombre: str
-    rol_id: Optional[int] = 3
 
 
 class UserUpdate(schemas.BaseUserUpdate):
+    model_config = ConfigDict(extra="forbid")
     nombre: Optional[str] = None
-    rol_id: Optional[int] = None
-    esta_activo: Optional[bool] = None

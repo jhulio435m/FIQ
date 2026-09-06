@@ -6,7 +6,7 @@ test.describe('Flujo de Gestión de Recursos Académicos', () => {
   test('debe permitir a un usuario autorizado subir un recurso y a un admin aprobarlo', async ({ page }) => {
     // 1. Iniciar sesión como administrador (quien tiene permisos de Docente/Admin para subir)
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@fiq.uncp.edu.pe');
+    await page.getByLabel('Correo institucional').fill('admin@fiq.uncp.edu.pe');
     await page.getByLabel('Contraseña').fill('admin123');
     await page.locator('form').getByRole('button', { name: 'Ingresar' }).click();
 

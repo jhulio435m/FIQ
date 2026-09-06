@@ -19,7 +19,7 @@ export function ResourceCitationPanel({ resource }: Props) {
 
   const getCitationText = () => {
     const title = resource.titulo
-    const originUrl = `${window.location.origin}/biblioteca`
+    const originUrl = `${window.location.origin}/biblioteca/recurso/${resource.id}`
     
     switch (citationFormat) {
       case "IEEE":
@@ -42,7 +42,7 @@ export function ResourceCitationPanel({ resource }: Props) {
     const key = `fiq_${resource.id}_${citationYear}`
     const title = resource.titulo
     const course = resource.curso_nombre ?? "Química"
-    const originUrl = `${window.location.origin}/biblioteca`
+    const originUrl = `${window.location.origin}/biblioteca/recurso/${resource.id}`
     
     return `@misc{${key},
   author = {${citationAuthors}},

@@ -10,6 +10,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SESSION_COOKIE_SECURE: "false"
     
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +20,7 @@ jobs:
       - name: Start Docker Compose Services
         run: |
           # Start Postgres, Redis, and MinIO in the background
-          docker compose up -d postgres redis minio
+          docker compose up -d postgres redis minio mongo clamav
           
           # Wait for Postgres to be healthy
           echo "Waiting for Postgres..."
@@ -41,7 +44,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          version: "latest"
+          version: "0.11.19"
           enable-cache: false
 
       - name: Run backend tests
@@ -55,7 +58,7 @@ jobs:
           SECRET_KEY: dev-secret-key-change-in-production
         run: |
           cd backend
-          uv run --extra dev pytest
+          uv run --frozen --extra dev pytest --cov --cov-report=xml --cov-report=term --cov-fail-under=50
 
       - name: Check OpenAPI documentation alignment
         run: |
@@ -82,7 +85,7 @@ jobs:
       - name: Run frontend unit tests
         run: |
           cd frontend
-          npm run test:unit
+          npm run test:coverage
 
       - name: Build frontend
         run: |
@@ -97,27 +100,12 @@ jobs:
           cd frontend
           npx playwright install --with-deps
 
-      - name: Start FastAPI Backend in Background
-        env:
-          DATABASE_URL: postgresql://fiq:fiq123@localhost:5433/fiq_db
-          REDIS_URL: redis://localhost:6379/0
-          S3_ENDPOINT: http://localhost:9000
-          S3_ACCESS_KEY: minioadmin
-          S3_SECRET_KEY: minioadmin
-          S3_BUCKET_NAME: fiq-recursos
-          SECRET_KEY: dev-secret-key-change-in-production
+      - name: Migrate and start integrated application
         run: |
-          cd backend
-          # Run database migrations
-          uv run alembic upgrade head
-          # Seed database
-          uv run python -m app.core.seed
-          # Start server in background
-          uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 &
-          # Wait for backend to be ready
-          for i in {1..10}; do
-            curl -s http://localhost:8000/health && break || sleep 2
-          done
+          docker compose run --rm --no-deps backend alembic upgrade head
+          docker compose run --rm --no-deps backend python -m app.core.seed
+          docker compose up -d --wait --wait-timeout 300 backend frontend
+          curl --fail http://localhost/api/health
 
       - name: Run E2E Playwright tests
         env:
@@ -147,3 +135,36 @@ jobs:
             frontend/playwright-report/
             frontend/test-results/
             frontend/coverage/
+            backend/coverage.xml
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: '0.11.19'
+          enable-cache: false
+      - name: Audit frontend runtime dependencies
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit locked backend dependencies
+        working-directory: backend
+        run: |
+          uv export --frozen --no-dev --no-hashes -o /tmp/fiq-runtime-requirements.txt
+          uvx pip-audit --disable-pip --no-deps -r /tmp/fiq-runtime-requirements.txt
+
+  secrets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

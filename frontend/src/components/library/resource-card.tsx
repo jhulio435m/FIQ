@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { BookOpen, FileText, Download, Eye, Video, PenLine, Presentation, FlaskConical } from "lucide-react"
+import { BookOpen, FileText, Download, Eye, Video, PenLine, Presentation, FlaskConical, Layers3 } from "lucide-react"
 import type { Recurso } from "@/services/resources"
 import { formatBytes } from "@/lib/utils"
 
@@ -24,16 +24,36 @@ export function ResourceCard({ resource, onClick }: Props) {
   const meta = typeMeta[resource.tipo_recurso_id]
   const Icon = meta?.icon ?? FileText
   const badgeClass = meta?.color ?? "bg-gray-100 text-gray-600"
+  const availableFormats = resource.formatos_disponibles ?? []
 
   return (
     <Card
       className="group p-4 hover:shadow-md hover:border-brand-200 transition-all cursor-pointer"
       onClick={onClick}
+      role="button"
+      tabIndex={0}
+      aria-label={`Abrir recurso: ${resource.titulo}`}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault()
+          onClick?.()
+        }
+      }}
     >
       <div className="flex gap-4">
-        <div className={`shrink-0 w-11 h-11 rounded-lg flex items-center justify-center ${badgeClass.split(" ")[0]} ${badgeClass.split(" ")[1]}`}>
-          <Icon className="h-5 w-5" />
-        </div>
+        {resource.cover_url ? (
+          <img
+            src={resource.cover_url}
+            alt={`Portada de ${resource.titulo}`}
+            className="h-20 w-14 shrink-0 rounded-md border border-gray-200 object-cover"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <div className={`shrink-0 w-11 h-11 rounded-lg flex items-center justify-center ${badgeClass.split(" ")[0]} ${badgeClass.split(" ")[1]}`}>
+            <Icon className="h-5 w-5" />
+          </div>
+        )}
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
@@ -45,8 +65,15 @@ export function ResourceCard({ resource, onClick }: Props) {
             </span>
           </div>
 
-          {resource.resumen && (
+          {resource.resumen && !resource.snippet && (
             <p className="text-sm text-gray-500 mt-1 line-clamp-2">{resource.resumen}</p>
+          )}
+
+          {resource.snippet && (
+            <div className="mt-1.5 rounded bg-amber-50/80 border border-amber-200/70 px-2.5 py-1.5 text-xs text-amber-900">
+              <span className="font-semibold text-amber-800 mr-1">Coincidencia en texto:</span>
+              <span className="italic">"{resource.snippet}"</span>
+            </div>
           )}
 
           <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -55,6 +82,11 @@ export function ResourceCard({ resource, onClick }: Props) {
             </Badge>
             {resource.curso_nombre && (
               <span className="text-xs text-gray-400">{resource.curso_nombre}</span>
+            )}
+            {resource.idioma && (
+              <Badge variant="outline" className="text-xs font-normal uppercase">
+                {resource.idioma}
+              </Badge>
             )}
           </div>
 
@@ -67,6 +99,15 @@ export function ResourceCard({ resource, onClick }: Props) {
               <Download className="h-3.5 w-3.5" />
               {resource.descargas}
             </span>
+            {(resource.ediciones_disponibles ?? 1) > 1 && (
+              <span className="flex items-center gap-1 text-brand-600">
+                <Layers3 className="h-3.5 w-3.5" />
+                {resource.ediciones_disponibles} ediciones
+              </span>
+            )}
+            {availableFormats.length > 1 && (
+              <span className="text-brand-600">{availableFormats.join(" / ")}</span>
+            )}
           </div>
         </div>
       </div>

@@ -1,0 +1,27 @@
+services:
+  watcher:
+    build: .
+    image: fiq-watcher:local
+    restart: always
+    env_file:
+      - ./watcher.env
+    command: ["/opt/fiq-watcher/run_watcher_loop.sh"]
+    volumes:
+      - watcher_state:/var/lib/fiq-watcher
+      - watcher_logs:/var/log/fiq-watcher
+
+  telegram-bot:
+    image: fiq-watcher:local
+    restart: always
+    env_file:
+      - ./watcher.env
+    command: ["/opt/fiq-watcher/run_telegram_bot.sh"]
+    depends_on:
+      - watcher
+    volumes:
+      - watcher_state:/var/lib/fiq-watcher
+      - watcher_logs:/var/log/fiq-watcher
+
+volumes:
+  watcher_state:
+  watcher_logs:

@@ -23,6 +23,11 @@ Usar `backend/.env.example` como base. No subir `.env`, `.env.prod`, llaves priv
 Variables principales:
 
 - `DATABASE_URL`
+- `DATABASE_READ_URL` opcional; en HA debe apuntar al endpoint de lectura de HAProxy `:5001`.
+- `POSTGRES_HA_HOST` para `docker-compose.prod.yml`; por defecto usa el HAProxy por Tailscale `100.79.244.99`, con escrituras en `:5000` y lecturas en `:5001`.
+- `RESOURCE_SHARD_DATABASE_URLS` opcional; DSN PostgreSQL separados por coma para sharding real de recursos por `curso_id`.
+- `RESOURCE_SHARD_READ_DATABASE_URLS` opcional; DSN de lectura por shard, en el mismo orden que `RESOURCE_SHARD_DATABASE_URLS`.
+- `docker-compose.shard.yml` levanta un PostgreSQL independiente de recursos por VPS; usarlo con `RESOURCE_SHARD_BIND_IP` de la red privada/Tailscale.
 - `REDIS_URL`
 - `MONGO_ENABLED`
 - `MONGO_URL`
@@ -30,6 +35,8 @@ Variables principales:
 - `MONGO_ACTIVITY_COLLECTION`
 - `MONGO_EXTERNAL_CACHE_COLLECTION`
 - `SECRET_KEY`
+- `ACCESS_TOKEN_EXPIRE_MINUTES` y `REFRESH_TOKEN_EXPIRE_DAYS` para la sesión JWT.
+- `AUTH_RATE_LIMIT_REQUESTS`, `EXTERNAL_SEARCH_RATE_LIMIT_REQUESTS` y `RATE_LIMIT_WINDOW_SECONDS` para controles básicos de abuso por proceso.
 - `S3_ENDPOINT`
 - `S3_ACCESS_KEY`
 - `S3_SECRET_KEY`
@@ -131,6 +138,12 @@ Permisos resumidos:
 - Clave de almacenamiento generada por servidor.
 - Auditoria `upload` o `upload_rejected`.
 
+## Sesiones
+
+`POST /auth/login` entrega access y refresh token. `POST /auth/refresh` valida y rota el refresh token antes de emitir una nueva pareja. El frontend reintenta una vez la solicitud original ante un `401` y cierra la sesión si la rotación falla.
+
+El rate limit actual se mantiene en memoria por proceso. Antes de escalar horizontalmente la exposición pública debe moverse a Redis para compartir el contador entre réplicas.
+
 ## Doble base de datos
 
 PostgreSQL sigue siendo la fuente transaccional para usuarios, roles, cursos, recursos, estados, moderacion y reportes relacionales. MongoDB se usa solo para datos documentales que cambian de forma con frecuencia: eventos de auditoria enriquecidos en `activity_events` y cache de catalogo externo en `external_catalog_cache`.
@@ -138,6 +151,12 @@ PostgreSQL sigue siendo la fuente transaccional para usuarios, roles, cursos, re
 Cada llamada a `log_activity` mantiene el registro SQL en `registro_actividades` y, si `MONGO_ENABLED=true`, emite un documento Mongo con `detalle_accion`, IP, user agent, usuario, tipo, fecha y referencia al registro SQL. Si MongoDB no esta configurado, la operacion principal continua usando PostgreSQL.
 
 Las busquedas `GET /external/search/books` y `GET /external/search/articles` consultan primero `external_catalog_cache`. Si no hay entrada vigente, llaman a los proveedores externos, normalizan el resultado y guardan el documento con expiracion TTL. Esto reduce latencia, evita repetir llamadas y conserva snapshots temporales de metadatos bibliograficos.
+
+La Biblioteca usa un único campo con selector `Biblioteca local / APIs académicas`. El modo local devuelve total real, paginación y orden global, busca en metadatos bibliográficos y ofrece una ficha permanente por recurso; el modo APIs consulta únicamente proveedores externos para evitar solicitudes duplicadas. DOI e ISBN se almacenan por separado y las importaciones conservan portada, idioma, licencia, temas y procedencia.
+
+El catálogo local separa `obra → edición → archivo`: agrupa formatos y ediciones sin duplicar resultados, admite varios ISBN por edición y mantiene el ID público de cada recurso. Las altas nuevas se vinculan automáticamente por DOI o ISBN exacto. Para poblar estas relaciones en instalaciones existentes, aplicar las migraciones y ejecutar `cd backend && uv run python -m app.core.backfill_bibliography`; el proceso es idempotente.
+
+Los usuarios autenticados disponen de `/mi-biblioteca`: favoritos, estados `Quiero leer`/`Leyendo`/`Leído`, página actual, listas privadas o compartidas e historial propio de consultas y descargas. Los datos personales son privados por defecto y el propietario puede eliminar su historial.
 
 ## Integraciones bibliograficas externas
 
@@ -167,3 +186,4 @@ Los resultados externos se normalizan a metadatos comunes: titulo, autores, edit
 - [Pruebas](./docs/11_pruebas.md)
 - [Laboratorios](./docs/12_laboratorios.md)
 - [Integraciones externas](./docs/13_integraciones_externas.md)
+- [Plan de evolución de la Biblioteca Digital](./docs/18_plan_biblioteca_digital.md)

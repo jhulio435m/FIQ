@@ -46,20 +46,22 @@ El backend se encarga de:
 
 ## Flujo de importacion
 
-1. Usuario busca en Biblioteca.
-2. La seccion "Fuentes externas" consulta libros o articulos.
+1. Usuario selecciona `APIs académicas` en el único buscador de Biblioteca.
+2. La sección "Fuentes externas" consulta libros o artículos; un DOI activa la búsqueda exacta y Unpaywall cuando está configurado.
 3. Docente/Admin presiona "Importar".
-4. Backend valida rol, tipo local, curso opcional y DOI duplicado.
+4. Backend valida rol, proveedor permitido, URLs HTTPS, tipo local, curso opcional y duplicados por DOI, ISBN o identificador del proveedor.
 5. Se crea un `Recurso` en estado `Pendiente`.
 6. Admin revisa y aprueba/observa como cualquier upload.
 
 La importacion no descarga archivos externos automaticamente. Guarda una URL legal de referencia en `url_archivo` y `archivo_mime="text/html"`.
+El detalle detecta ese MIME y muestra un enlace a la fuente original en vez de intentar procesar la página como PDF.
 
 ## Seguridad y calidad
 
 - No hay llamadas directas desde frontend a APIs externas.
 - No se exponen API keys ni emails en JavaScript.
-- Un DOI duplicado responde `409`.
+- Un DOI, ISBN o identificador externo duplicado responde `409`.
+- DOI e ISBN se almacenan por separado; también se conservan portada, idioma, licencia y temas.
 - Estudiante recibe `403` al intentar importar.
 - Fallas de proveedor devuelven warnings y no rompen toda la busqueda.
 - Los recursos importados no aparecen en catalogo publico hasta ser aprobados.
