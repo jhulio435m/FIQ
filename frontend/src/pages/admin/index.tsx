@@ -4,6 +4,7 @@ import { UserManagement } from "@/components/admin/user-management"
 import { PendingResourcesTab } from "./tabs/PendingResourcesTab"
 import { ResourceStatsTab } from "./tabs/ResourceStatsTab"
 import { ReportsTab } from "./tabs/ReportsTab"
+import { CommunityReportsTab } from "./tabs/CommunityReportsTab"
 
 export default function Admin() {
   return (
@@ -13,6 +14,7 @@ export default function Admin() {
       <Tabs defaultValue="pending">
         <TabsList className="mb-6">
           <TabsTrigger value="pending" className="cursor-pointer">Pendientes</TabsTrigger>
+          <TabsTrigger value="issues" className="cursor-pointer">Incidencias</TabsTrigger>
           <TabsTrigger value="resources" className="cursor-pointer">Recursos</TabsTrigger>
           <TabsTrigger value="users" className="cursor-pointer">Usuarios</TabsTrigger>
           <TabsTrigger value="reports" className="cursor-pointer">Reportes</TabsTrigger>
@@ -20,6 +22,10 @@ export default function Admin() {
 
         <TabsContent value="pending">
           <PendingResourcesTab />
+        </TabsContent>
+
+        <TabsContent value="issues">
+          <CommunityReportsTab />
         </TabsContent>
 
         <TabsContent value="resources">

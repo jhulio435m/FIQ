@@ -116,6 +116,9 @@ test.describe('Flujo de Biblioteca y Descargas', () => {
     await page.getByRole('tab', { name: 'Usuarios' }).click();
     // Verificar que la tabla de usuarios no esté vacía
     await expect(page.locator('table tbody tr')).not.toHaveCount(0);
+
+    await page.getByRole('tab', { name: 'Incidencias' }).click();
+    await expect(page.getByText('Reportes de Calidad e Incidencias')).toBeVisible();
   });
 
   test('debe mostrar colecciones destacadas y paneles de comunidad en detalle de recurso', async ({ page }) => {

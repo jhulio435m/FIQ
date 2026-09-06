@@ -124,6 +124,37 @@ export const handlers = [
     mas_vistos: mockResources,
     mas_descargados: mockResources,
   })),
+  http.get("/api/resources/reports/pending", () => HttpResponse.json([
+    {
+      id: "rep-1",
+      recurso_id: 1,
+      recurso_titulo: "Balance de Materia",
+      usuario_id: "admin-id",
+      usuario_email: "estudiante@fiq.uncp.edu.pe",
+      motivo: "metadatos_incorrectos",
+      descripcion: "El año de publicación en la portada dice 2024, no 2026.",
+      estado: "pendiente",
+      resolucion: null,
+      created_at: "2026-09-06T12:00:00",
+      updated_at: "2026-09-06T12:00:00",
+    },
+  ])),
+  http.patch("/api/resources/reports/:id", async ({ request, params }) => {
+    const body = await request.json() as { estado: string; resolucion?: string }
+    return HttpResponse.json({
+      id: params.id,
+      recurso_id: 1,
+      recurso_titulo: "Balance de Materia",
+      usuario_id: "admin-id",
+      usuario_email: "estudiante@fiq.uncp.edu.pe",
+      motivo: "metadatos_incorrectos",
+      descripcion: "El año de publicación en la portada dice 2024, no 2026.",
+      estado: body.estado,
+      resolucion: body.resolucion ?? null,
+      created_at: "2026-09-06T12:00:00",
+      updated_at: "2026-09-06T14:00:00",
+    })
+  }),
   http.get("/api/resources/:id", ({ params }) => {
     const resource = mockResources.find((item) => item.id === Number(params.id))
     return resource
