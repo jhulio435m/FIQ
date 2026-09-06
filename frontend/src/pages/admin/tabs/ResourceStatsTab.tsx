@@ -1,5 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { usePendingResources, useReportsData } from "@/hooks/use-reports-data"
+import { UploadDialog } from "@/components/library/upload-dialog"
+import { Button } from "@/components/ui/button"
+import { BookOpen } from "lucide-react"
+import { Link } from "react-router"
 
 export function ResourceStatsTab() {
   const { query } = usePendingResources()
@@ -11,8 +15,17 @@ export function ResourceStatsTab() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <CardTitle className="text-brand-700 dark:text-brand-400 text-lg">Gestión de Recursos</CardTitle>
+        <div className="flex items-center gap-2">
+          <Link to="/biblioteca">
+            <Button variant="outline" size="sm" className="cursor-pointer">
+              <BookOpen className="h-4 w-4 mr-1.5" />
+              Ver biblioteca
+            </Button>
+          </Link>
+          <UploadDialog />
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid gap-4 md:grid-cols-3">

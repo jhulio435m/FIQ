@@ -54,4 +54,14 @@ describe("Admin", () => {
 
     expect(await screen.findByText(/no se pudieron cargar los reportes/i)).toBeInTheDocument()
   })
+
+  it("permite abrir el diálogo de subida de recursos desde el panel", async () => {
+    renderWithProviders(<Admin />)
+
+    const uploadButtons = screen.getAllByRole("button", { name: /subir recurso/i })
+    expect(uploadButtons.length).toBeGreaterThan(0)
+    await userEvent.click(uploadButtons[0])
+
+    expect(await screen.findByRole("heading", { name: /subir recurso académico/i })).toBeInTheDocument()
+  })
 })

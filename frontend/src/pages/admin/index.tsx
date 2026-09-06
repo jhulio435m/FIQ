@@ -5,11 +5,20 @@ import { PendingResourcesTab } from "./tabs/PendingResourcesTab"
 import { ResourceStatsTab } from "./tabs/ResourceStatsTab"
 import { ReportsTab } from "./tabs/ReportsTab"
 import { CommunityReportsTab } from "./tabs/CommunityReportsTab"
+import { UploadDialog } from "@/components/library/upload-dialog"
 
 export default function Admin() {
   return (
     <div className="animate-fade-in max-w-6xl mx-auto px-4 py-12">
-      <h1 className="text-3xl font-bold text-brand-900 dark:text-brand-100 mb-8">Panel Administrativo</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-brand-900 dark:text-brand-100">Panel Administrativo</h1>
+          <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">
+            Gestión editorial de contenidos, usuarios, incidencias y reportes analíticos.
+          </p>
+        </div>
+        <UploadDialog />
+      </div>
 
       <Tabs defaultValue="pending">
         <TabsList className="mb-6">
