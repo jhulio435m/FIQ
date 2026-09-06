@@ -119,6 +119,11 @@ export const handlers = [
   http.get("http://localhost/api/external/search/articles", externalArticlesHandler),
   http.get("http://localhost/external/search/articles", externalArticlesHandler),
   http.get("/api/resources/pending", () => HttpResponse.json(mockResources)),
+  http.get("/api/resources/featured", () => HttpResponse.json({
+    recientes: mockResources,
+    mas_vistos: mockResources,
+    mas_descargados: mockResources,
+  })),
   http.get("/api/resources/:id", ({ params }) => {
     const resource = mockResources.find((item) => item.id === Number(params.id))
     return resource
@@ -212,6 +217,63 @@ export const handlers = [
     url_simulacion: "/labs/destilacion",
     nivel_id: 1,
   })),
+  http.get("/api/resources/:id/related", () => HttpResponse.json(mockResources)),
+  http.get("/api/resources/:id/reviews", () => HttpResponse.json({
+    promedio: 4.5,
+    total: 2,
+    reviews: [
+      {
+        id: "rev-1",
+        recurso_id: 1,
+        usuario_id: "u-1",
+        usuario_nombre: "Juan Pérez",
+        puntuacion: 5,
+        comentario: "Excelente material para el curso.",
+        created_at: "2026-09-01T12:00:00",
+        updated_at: "2026-09-01T12:00:00",
+      },
+      {
+        id: "rev-2",
+        recurso_id: 1,
+        usuario_id: "u-2",
+        usuario_nombre: "María Lopez",
+        puntuacion: 4,
+        comentario: "Muy detallado.",
+        created_at: "2026-09-02T12:00:00",
+        updated_at: "2026-09-02T12:00:00",
+      },
+    ],
+  })),
+  http.post("/api/resources/:id/reviews", async ({ request, params }) => {
+    const body = await request.json() as { puntuacion: number; comentario?: string }
+    return HttpResponse.json({
+      id: "rev-new",
+      recurso_id: Number(params.id),
+      usuario_id: "admin-id",
+      usuario_nombre: "Admin FIQ",
+      puntuacion: body.puntuacion,
+      comentario: body.comentario ?? null,
+      created_at: "2026-09-06T12:00:00",
+      updated_at: "2026-09-06T12:00:00",
+    })
+  }),
+  http.delete("/api/resources/:id/reviews/me", () => new HttpResponse(null, { status: 204 })),
+  http.post("/api/resources/:id/reports", async ({ request, params }) => {
+    const body = await request.json() as { motivo: string; descripcion: string }
+    return HttpResponse.json({
+      id: "rep-1",
+      recurso_id: Number(params.id),
+      recurso_titulo: "Balance de Materia",
+      usuario_id: "admin-id",
+      usuario_email: "admin@fiq.uncp.edu.pe",
+      motivo: body.motivo,
+      descripcion: body.descripcion,
+      estado: "pendiente",
+      resolucion: null,
+      created_at: "2026-09-06T12:00:00",
+      updated_at: "2026-09-06T12:00:00",
+    }, { status: 201 })
+  }),
 ]
 
 export const server = setupServer(...handlers)

@@ -14,7 +14,7 @@ a un despliegue operativo.
 | P3 | Imágenes inmutables y despliegue con migración, rollout, smoke y rollback | Pendiente | Pipeline revisable y comprobaciones locales; credenciales de staging para ejecución remota |
 | P4 | Stack integrado y staging con HTTPS, SMTP y almacenamiento real | Pendiente | E2E completo y flujo externo de upload/moderación/lectura |
 | P5 | Restauración, failover, carga y alertas | Pendiente | Ejercicios medidos en destinos desechables; RPO/RTO demostrados |
-| P6 | Texto completo/OCR/lector, descubrimiento/comunidad y operación masiva | Pendiente | Entregas funcionales incrementales después de estabilizar la base |
+| P6 | Descubrimiento/comunidad (Fase 5), texto completo (Fase 4) y operación masiva (Fase 6) | Fase 4 y 5 completadas | Entregas funcionales incrementales: texto completo, marcadores, recomendaciones, reseñas y reportes validados |
 
 ## Decisiones y compatibilidad
 
@@ -46,6 +46,14 @@ a un despliegue operativo.
   - Marcadores de lectura y notas privadas en visor PDF (`PdfViewer`) y persistencia en backend.
   - Suite de pruebas backend: 63 pruebas pasando (100%).
   - Suite de pruebas frontend: 27 pruebas unitarias Vitest pasando (100%).
+- Descubrimiento y comunidad (Fase 5):
+  - Endpoints `GET /resources/featured` y `GET /resources/{id}/related` para exploración heurística y descubrimiento guiado.
+  - Modelos y tablas `valoracion_recurso` y `reporte_recurso`, migración Alembic `f3a4b5c6d7e8_add_discovery_reviews_and_reports.py` aplicada exitosamente sobre `fiq-phases-postgres-1`.
+  - Componentes `FeaturedResourcesSection`, `ResourceRelatedPanel`, `ResourceReviewsPanel` y `ResourceReportDialog` integrados en el flujo de usuario.
+  - Suite de pruebas backend: 66 pruebas aprobadas (100%).
+  - Suite de pruebas frontend: 36 pruebas unitarias aprobadas en 19 archivos Vitest (100%).
+  - Suite E2E Playwright: 15 pruebas pasando en entorno integrado con Docker (100%).
+  - Alineación de contrato API: 86 endpoints documentados y verificados con `npm run openapi:check`.
 
 ## Requisitos para las fases remotas
 

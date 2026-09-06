@@ -56,6 +56,14 @@ Contrato REST real generado por FastAPI y verificado con `npm run openapi:check`
 | `POST /resources/{resource_id}/download` | JWT | Incrementa descargas y devuelve URL interna de archivo. |
 | `GET /resources/{resource_id}/url` | Publica | Devuelve URL interna del archivo. |
 | `GET /resources/{resource_id}/file` | Publica | Stream del PDF desde object storage. |
+| `GET /resources/featured` | Publica | Carruseles de recursos destacados (recientes, más vistos, más descargados). |
+| `GET /resources/{resource_id}/related` | Publica | Recursos relacionados recomendados por curso, tema o tipo. |
+| `GET /resources/{resource_id}/reviews` | Publica | Lista de valoraciones y promedio de estrellas del recurso. |
+| `POST /resources/{resource_id}/reviews` | JWT | Califica (1-5 estrellas) y opcionalmente comenta un recurso. |
+| `DELETE /resources/{resource_id}/reviews/me` | JWT | Elimina la valoración personal del recurso. |
+| `POST /resources/{resource_id}/reports` | JWT | Reporta un problema en un recurso (corrupto, duplicado, metadatos). |
+| `GET /resources/reports/pending` | Admin | Lista incidencias y reportes pendientes de revisión. |
+| `PATCH /resources/reports/{report_id}` | Admin | Actualiza estado y resolución de un reporte de incidencia. |
 | `GET /works/by-resource/{resource_id}` | Publica | Obra, ediciones y archivos aprobados vinculados a un recurso. |
 | `GET /works/{work_id}` | Publica | Ficha bibliográfica de una obra con sus ediciones y formatos públicos. |
 | `POST /works/resources/{resource_id}/sync` | Admin | Vincula de forma idempotente un recurso legado con obra, edición y archivo. |

@@ -18,6 +18,8 @@ import { ResourceCitationPanel } from "./ResourceCitationPanel"
 import { ResourceStatsPanel } from "./ResourceStatsPanel"
 import { ResourceActionBar } from "./ResourceActionBar"
 import { ResourceVersionsPanel } from "./resource-versions-panel"
+import { ResourceRelatedPanel } from "./ResourceRelatedPanel"
+import { ResourceReviewsPanel } from "./ResourceReviewsPanel"
 
 function getErrorStatus(error: unknown) {
   if (typeof error === "object" && error !== null && "response" in error) {
@@ -174,6 +176,8 @@ export function ResourceDetail({ resource, open, onOpenChange }: Props) {
               <ResourceCitationPanel resource={localResource} />
               <ResourceStatsPanel resource={localResource} />
               <ResourceVersionsPanel resourceId={localResource.id} />
+              <ResourceRelatedPanel resourceId={localResource.id} />
+              <ResourceReviewsPanel resourceId={localResource.id} />
             </div>
           )}
 

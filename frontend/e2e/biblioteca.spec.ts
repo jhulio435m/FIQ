@@ -117,4 +117,23 @@ test.describe('Flujo de Biblioteca y Descargas', () => {
     // Verificar que la tabla de usuarios no esté vacía
     await expect(page.locator('table tbody tr')).not.toHaveCount(0);
   });
+
+  test('debe mostrar colecciones destacadas y paneles de comunidad en detalle de recurso', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByLabel('Correo institucional').fill('admin@fiq.uncp.edu.pe');
+    await page.getByLabel('Contraseña').fill('admin123');
+    await page.locator('form').getByRole('button', { name: 'Ingresar' }).click();
+    await expect(page.locator('header')).toContainText('Administrador PRO');
+
+    await page.goto('/biblioteca');
+    await expect(page.getByText('Descubrimiento y Colecciones Destacadas')).toBeVisible({ timeout: 15000 });
+
+    // Open first resource
+    await page.getByRole('button', { name: /^Abrir recurso:/ }).first().click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+
+    // Verify reviews and report triggers are visible
+    await expect(page.getByText('Valoraciones y Reseñas')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reportar problema con el documento' })).toBeVisible();
+  });
 });

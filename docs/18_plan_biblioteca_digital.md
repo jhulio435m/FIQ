@@ -159,14 +159,41 @@ Estado: **completada y validada en el runtime Docker local**.
 
 ## Fase 5 — Descubrimiento y comunidad
 
+Estado: **implementada y validada localmente**.
+
 ### Alcance
 
-- Recursos relacionados por curso, tema y co-consulta.
-- Carruseles de novedades y popularidad.
-- Recomendaciones con explicación y opción de desactivación.
-- Valoraciones y reseñas moderadas.
-- Reportes de archivo corrupto, duplicado o metadatos incorrectos.
-- Sugerencias de corrección con historial de moderación.
+- Recursos relacionados por curso, tema y tipo de recurso.
+- Carruseles y colecciones de novedades y popularidad.
+- Recomendaciones con explicación algorítmica y opción de desactivación por el usuario.
+- Valoraciones (1 a 5 estrellas) y reseñas comunitarias con recálculo dinámico de promedios.
+- Reportes de archivo corrupto, duplicado, metadatos incorrectos o sugerencias de corrección.
+- Flujo de moderación y resolución de reportes para administradores.
+
+### Entrega implementada
+
+- Endpoints de descubrimiento:
+  - `GET /resources/featured`: devuelve listas curadas de recursos recientes, más visualizados y más descargados.
+  - `GET /resources/{id}/related`: algoritmo que vincula recursos por curso, temas clave y tipo de recurso, excluyendo el recurso en consulta.
+- Módulos de valoraciones y reseñas:
+  - Modelo `ValoracionRecurso` con restricción de una sola reseña por usuario y recurso (upsert seguro).
+  - Endpoints `GET /resources/{id}/reviews`, `POST /resources/{id}/reviews` y `DELETE /resources/{id}/reviews/me`.
+  - Componente de frontend `ResourceReviewsPanel` integrado en `ResourceDetail`, con estrellas interactivas, edición de reseña propia y lista de comentarios.
+- Sistema de reportes de calidad e inconsistencias:
+  - Modelo `ReporteRecurso` con auditoría de usuario, recurso, motivo (`archivo_corrupto`, `duplicado`, `metadatos_incorrectos`, `otro`), estado (`pendiente`, `resuelto`, `descartado`) y resolución editorial.
+  - Endpoints `POST /resources/{id}/reports`, `GET /resources/reports/pending` y `PATCH /resources/reports/{id}`.
+  - Componente de diálogo `ResourceReportDialog` integrado en `ResourceActionBar`.
+- Sección de descubrimiento en catálogo:
+  - `FeaturedResourcesSection` con pestañas reactivas de "Novedades", "Más consultados" y "Más descargados", con botón de ocultar/explorar persistido.
+- Migración aditiva Alembic `f3a4b5c6d7e8_add_discovery_reviews_and_reports.py` verificada y aplicada en base productiva local (`fiq-phases-postgres-1`).
+
+### Evidencia local
+
+- 66 pruebas backend aprobadas (100% de la suite pytest), incluyendo recomendaciones, carruseles, cálculo de promedio de valoraciones y control RBAC de reportes de comunidad.
+- 36 pruebas unitarias frontend aprobadas (19 archivos de prueba Vitest), cubriendo servicios de comunidad, renderizado y flujos interactivos de reseñas, reportes y destacados.
+- 15 pruebas Playwright E2E aprobadas en entorno local contra contenedores Docker reales.
+- ESLint con 0 errores y 0 warnings; compilación de producción de Vite exitosa en 723ms.
+- Paridad OpenAPI de 86 endpoints documentados y verificados (`npm run openapi:check`).
 
 ## Fase 6 — Operación a escala
 

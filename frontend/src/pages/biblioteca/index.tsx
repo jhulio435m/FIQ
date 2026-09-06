@@ -7,6 +7,7 @@ import { ResourceGrid } from "@/components/library/resource-grid"
 import { ResourceDetail } from "@/components/library/resource-detail"
 import { UploadDialog } from "@/components/library/upload-dialog"
 import { ExternalCatalogPanel } from "@/components/library/external-catalog-panel"
+import { FeaturedResourcesSection } from "@/components/library/FeaturedResourcesSection"
 import { getResource, getResourceCatalog } from "@/services/resources"
 import { useDebounce } from "@/hooks/use-debounce"
 import { Button } from "@/components/ui/button"
@@ -132,6 +133,11 @@ export default function Biblioteca() {
             El recurso solicitado no existe o todavía no está aprobado.
           </div>
         )}
+
+        {searchScope === "local" && !debouncedSearch && (
+          <FeaturedResourcesSection onSelect={handleSelect} />
+        )}
+
         {searchScope === "local" && <div className="flex items-center justify-between mb-4">
           <p className="text-sm text-gray-500 dark:text-zinc-400">
             {resourcesQuery.isLoading

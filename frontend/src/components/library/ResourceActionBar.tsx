@@ -12,6 +12,7 @@ import {
   type ReadingStatus,
 } from "@/services/personal-library"
 import { useState } from "react"
+import { ResourceReportDialog } from "./ResourceReportDialog"
 
 interface Props {
   isAuthenticated: boolean
@@ -129,6 +130,7 @@ export function ResourceActionBar({ isAuthenticated, resourceId, onDownload }: P
               </Button>
             </div>
           )}
+          <ResourceReportDialog resourceId={resourceId} />
         </div>
       )}
     </div>

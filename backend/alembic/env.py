@@ -18,6 +18,7 @@ from app.models.resource import Curso, EstadoRecurso, Recurso, RecursoEstadoHist
 from app.models.lab import NivelDificultad, ModuloLaboratorio
 from app.models.activity import RegistroActividad, TipoActividad
 from app.api.bibliography.models import ArchivoBibliografico, EdicionBibliografica, EdicionISBN, ObraBibliografica
+from app.models.community import ValoracionRecurso, ReporteRecurso
 
 target_metadata = SQLModel.metadata
 
