@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import type { FieldErrors, Resolver } from "react-hook-form"
 import * as z from "zod"
 import {
@@ -146,12 +146,14 @@ export function UploadDialog() {
       editorial: "",
       doi: "",
       isbn: "",
-      idioma: "",
+      idioma: "es",
       licencia: "",
       temas: "",
       anio: "",
     },
   })
+
+  const selectedIdioma = useWatch({ control: form.control, name: "idioma" }) ?? "es"
 
   const selectFile = (selectedFile: File | undefined) => {
     if (selectedFile) {
@@ -397,17 +399,46 @@ export function UploadDialog() {
                 </Label>
                 <Input
                   id="anio"
-                  type="number"
-                  min={1800}
-                  max={currentYear + 2}
-                  step={1}
+                  type="text"
                   inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4}
                   placeholder={`ej. ${currentYear}`}
-                  {...form.register("anio")}
+                  {...form.register("anio", {
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                      const onlyDigits = e.target.value.replace(/\D/g, "").slice(0, 4)
+                      e.target.value = onlyDigits
+                    },
+                  })}
                   onKeyDown={(e) => {
-                    if (["e", "E", "+", "-", "."].includes(e.key)) {
+                    if (
+                      [
+                        "Backspace",
+                        "Delete",
+                        "Tab",
+                        "Escape",
+                        "Enter",
+                        "ArrowLeft",
+                        "ArrowRight",
+                        "ArrowUp",
+                        "ArrowDown",
+                        "Home",
+                        "End",
+                      ].includes(e.key) ||
+                      e.ctrlKey ||
+                      e.metaKey
+                    ) {
+                      return
+                    }
+                    if (!/^\d$/.test(e.key)) {
                       e.preventDefault()
                     }
+                  }}
+                  onPaste={(e) => {
+                    e.preventDefault()
+                    const pastedData = e.clipboardData.getData("text")
+                    const onlyDigits = pastedData.replace(/\D/g, "").slice(0, 4)
+                    form.setValue("anio", onlyDigits, { shouldValidate: true })
                   }}
                   className={`h-9 text-xs ${form.formState.errors.anio ? "border-red-500 focus-visible:ring-red-400" : ""}`}
                 />
@@ -444,14 +475,27 @@ export function UploadDialog() {
                 )}
               </div>
               <div className="space-y-1">
-                <Label htmlFor="idioma" className="text-brand-700 dark:text-brand-400 font-semibold text-xs">Idioma (Opcional)</Label>
-                <Input
-                  id="idioma"
-                  placeholder="ej. es, en"
-                  maxLength={10}
-                  {...form.register("idioma")}
-                  className={`h-9 text-xs ${form.formState.errors.idioma ? "border-red-500 focus-visible:ring-red-400" : ""}`}
-                />
+                <Label htmlFor="idioma" className="text-brand-700 dark:text-brand-400 font-semibold text-xs">
+                  Idioma (Opcional)
+                </Label>
+                <Select
+                  value={selectedIdioma}
+                  onValueChange={(val) => form.setValue("idioma", val ?? undefined, { shouldValidate: true })}
+                >
+                  <SelectTrigger id="idioma" className="h-9 text-xs">
+                    <SelectValue placeholder="Seleccionar idioma..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="es" className="text-xs">Español (es)</SelectItem>
+                    <SelectItem value="en" className="text-xs">Inglés (en)</SelectItem>
+                    <SelectItem value="qu" className="text-xs">Quechua (qu)</SelectItem>
+                    <SelectItem value="pt" className="text-xs">Portugués (pt)</SelectItem>
+                    <SelectItem value="fr" className="text-xs">Francés (fr)</SelectItem>
+                    <SelectItem value="de" className="text-xs">Alemán (de)</SelectItem>
+                    <SelectItem value="it" className="text-xs">Italiano (it)</SelectItem>
+                    <SelectItem value="otro" className="text-xs">Otro</SelectItem>
+                  </SelectContent>
+                </Select>
                 {form.formState.errors.idioma && (
                   <p className="text-xs text-red-500 font-medium">{form.formState.errors.idioma.message}</p>
                 )}

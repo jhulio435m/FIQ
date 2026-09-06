@@ -42,4 +42,24 @@ describe("UploadDialog", () => {
       expect(screen.getByText(/el isbn debe contener 10 o 13 dígitos válidos/i)).toBeInTheDocument()
     })
   })
+
+  it("bloquea caracteres no numéricos en el campo de año y provee selector de idioma", async () => {
+    renderWithProviders(<UploadDialog />)
+
+    await userEvent.click(screen.getByRole("button", { name: /subir recurso/i }))
+
+    const yearInput = screen.getByLabelText(/año de publicación/i) as HTMLInputElement
+    await userEvent.type(yearInput, "abc2025xyz")
+
+    // Solo los dígitos 2025 deben haber sido aceptados
+    expect(yearInput.value).toBe("2025")
+
+    // Selector de idioma presente con opciones
+    const idiomaCombobox = screen.getByRole("combobox", { name: /idioma/i })
+    expect(idiomaCombobox).toBeInTheDocument()
+
+    await userEvent.click(idiomaCombobox)
+    expect(await screen.findByRole("option", { name: /español \(es\)/i })).toBeInTheDocument()
+    expect(await screen.findByRole("option", { name: /inglés \(en\)/i })).toBeInTheDocument()
+  })
 })
