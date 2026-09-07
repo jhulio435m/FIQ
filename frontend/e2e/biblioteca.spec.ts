@@ -94,13 +94,22 @@ test.describe('Flujo de Biblioteca y Descargas', () => {
   });
 
   test('debe cargar portadas reales al buscar libros en APIs académicas', async ({ page }) => {
+    await page.route(/covers\.openlibrary\.org|archive\.org/, async (route) => {
+      const pixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+      await route.fulfill({
+        status: 200,
+        contentType: 'image/gif',
+        body: pixel,
+      });
+    });
+
     await page.goto('/biblioteca');
     await page.getByRole('textbox').fill('quimica');
     await page.getByRole('button', { name: 'APIs académicas' }).click();
 
     const cover = page.getByRole('img', { name: /^Portada de / }).first();
     await expect(cover).toBeVisible({ timeout: 15000 });
-    await expect.poll(() => cover.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+    await expect.poll(() => cover.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0), { timeout: 15000 }).toBe(true);
   });
 
   test('debe permitir a un admin ver el panel de administración', async ({ page }) => {

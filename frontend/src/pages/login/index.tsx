@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { BookOpen, Loader2 } from "lucide-react"
+import { BookOpen, Loader2, Eye, EyeOff } from "lucide-react"
 
 export default function Login() {
   const navigate = useNavigate()
@@ -16,6 +16,7 @@ export default function Login() {
   const setAuth = useAuthStore((s) => s.setAuth)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [msLoading, setMsLoading] = useState(false)
@@ -101,7 +102,9 @@ export default function Login() {
             <>
               <form onSubmit={handleSubmit} className="space-y-4">
                 {error && (
-                  <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-md">{error}</p>
+                  <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 px-3 py-2 rounded-md">
+                    {error}
+                  </p>
                 )}
                 <div className="space-y-2">
                   <Label htmlFor="email">Correo institucional</Label>
@@ -115,21 +118,41 @@ export default function Login() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Contraseña</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Contraseña</Label>
+                    <Link className="text-xs text-brand-700 dark:text-brand-400 hover:underline" to="/recuperar-contrasena">
+                      ¿Olvidaste tu contraseña?
+                    </Link>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? "Ocultar clave" : "Mostrar clave"}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-300 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
-                <Link className="block text-right text-sm text-brand-700 hover:underline" to="/recuperar-contrasena">
-                  ¿Olvidaste tu contraseña?
-                </Link>
                 <Button type="submit" className="w-full bg-brand-500 hover:bg-brand-600 cursor-pointer" disabled={loading}>
-                  {loading ? "Ingresando..." : "Ingresar"}
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin inline" />
+                      Ingresando...
+                    </>
+                  ) : (
+                    "Ingresar"
+                  )}
                 </Button>
               </form>
 

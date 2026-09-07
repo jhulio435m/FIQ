@@ -11,8 +11,9 @@ import { FeaturedResourcesSection } from "@/components/library/FeaturedResources
 import { getResource, getResourceCatalog } from "@/services/resources"
 import { useDebounce } from "@/hooks/use-debounce"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { useAuthStore } from "@/stores/auth"
-import { SlidersHorizontal, X } from "lucide-react"
+import { SlidersHorizontal, X, RotateCcw } from "lucide-react"
 import type { CatalogSort, Curso, Recurso, TipoRecurso } from "@/services/resources"
 import { useCourses, useResourceTypes } from "@/hooks/use-resource-data"
 import { canUpload } from "@/lib/auth"
@@ -138,28 +139,89 @@ export default function Biblioteca() {
           <FeaturedResourcesSection onSelect={handleSelect} />
         )}
 
-        {searchScope === "local" && <div className="flex items-center justify-between mb-4">
-          <p className="text-sm text-gray-500 dark:text-zinc-400">
-            {resourcesQuery.isLoading
-              ? "Buscando..."
-              : `${totalResources} resultado${totalResources !== 1 ? "s" : ""}${resources.length < totalResources ? ` · ${resources.length} cargados` : ""}`}
-          </p>
-          <div className="flex items-center gap-3">
-            <ResourceFilters
-              sortBy={sortBy}
-              onSortChange={setSortBy}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setFacetOpen(!facetOpen)}
-              className="lg:hidden cursor-pointer"
-            >
-              <SlidersHorizontal className="h-4 w-4 mr-1" />
-              Filtros
-            </Button>
+        {searchScope === "local" && (
+          <div className="space-y-3 mb-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-500 dark:text-zinc-400">
+                {resourcesQuery.isLoading
+                  ? "Buscando..."
+                  : `${totalResources} resultado${totalResources !== 1 ? "s" : ""}${resources.length < totalResources ? ` · ${resources.length} cargados` : ""}`}
+              </p>
+              <div className="flex items-center gap-3">
+                <ResourceFilters
+                  sortBy={sortBy}
+                  onSortChange={setSortBy}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFacetOpen(!facetOpen)}
+                  className="lg:hidden cursor-pointer"
+                >
+                  <SlidersHorizontal className="h-4 w-4 mr-1" />
+                  Filtros
+                </Button>
+              </div>
+            </div>
+
+            {(typeFilter !== "all" || cursoFilter !== "all" || Boolean(debouncedSearch)) && (
+              <div className="flex flex-wrap items-center gap-2 pt-1 pb-1">
+                <span className="text-xs text-muted-foreground font-medium">Filtros activos:</span>
+                {debouncedSearch && (
+                  <Badge variant="secondary" className="gap-1 text-xs py-0.5 px-2 bg-muted dark:bg-zinc-800">
+                    Búsqueda: {debouncedSearch}
+                    <button
+                      type="button"
+                      onClick={() => setSearch("")}
+                      aria-label="Quitar filtro de búsqueda"
+                      className="hover:text-red-500 cursor-pointer ml-1"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                {typeFilter !== "all" && (
+                  <Badge variant="secondary" className="gap-1 text-xs py-0.5 px-2 bg-muted dark:bg-zinc-800">
+                    Tipo: {tipos.find((t) => String(t.id) === typeFilter)?.nombre ?? typeFilter}
+                    <button
+                      type="button"
+                      onClick={() => setTypeFilter("all")}
+                      aria-label="Quitar filtro de tipo"
+                      className="hover:text-red-500 cursor-pointer ml-1"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                {cursoFilter !== "all" && (
+                  <Badge variant="secondary" className="gap-1 text-xs py-0.5 px-2 bg-muted dark:bg-zinc-800">
+                    Curso: {cursos.find((c) => String(c.id) === cursoFilter)?.nombre ?? cursoFilter}
+                    <button
+                      type="button"
+                      onClick={() => setCursoFilter("all")}
+                      aria-label="Quitar filtro de curso"
+                      className="hover:text-red-500 cursor-pointer ml-1"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => {
+                    setSearch("")
+                    setTypeFilter("all")
+                    setCursoFilter("all")
+                  }}
+                  className="text-xs text-brand-700 dark:text-brand-400 hover:underline h-6 px-1.5 cursor-pointer"
+                >
+                  Limpiar todo
+                </Button>
+              </div>
+            )}
           </div>
-        </div>}
+        )}
 
         {searchScope === "local" ? (
         <div className="flex gap-6">
@@ -180,6 +242,10 @@ export default function Biblioteca() {
                   cursos={cursos}
                   cursoFilter={cursoFilter}
                   onCursoChange={setCursoFilter}
+                  onClearAll={() => {
+                    setTypeFilter("all")
+                    setCursoFilter("all")
+                  }}
                 />
               </div>
             </div>
@@ -194,6 +260,10 @@ export default function Biblioteca() {
                 cursos={cursos}
                 cursoFilter={cursoFilter}
                 onCursoChange={setCursoFilter}
+                onClearAll={() => {
+                  setTypeFilter("all")
+                  setCursoFilter("all")
+                }}
               />
             </div>
           </aside>
@@ -246,6 +316,7 @@ function FacetPanel({
   cursos,
   cursoFilter,
   onCursoChange,
+  onClearAll,
 }: {
   tipos: TipoRecurso[]
   typeFilter: string
@@ -253,9 +324,25 @@ function FacetPanel({
   cursos: Curso[]
   cursoFilter: string
   onCursoChange: (v: string) => void
+  onClearAll: () => void
 }) {
+  const hasFilter = typeFilter !== "all" || cursoFilter !== "all"
+
   return (
     <div className="space-y-6">
+      {hasFilter && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onClearAll}
+          className="w-full text-xs text-brand-700 dark:text-brand-300 border-brand-200 dark:border-brand-900/50 hover:bg-brand-50 dark:hover:bg-brand-950/30 cursor-pointer"
+        >
+          <RotateCcw className="h-3 w-3 mr-1.5" />
+          Restablecer filtros
+        </Button>
+      )}
+
       <div>
         <h3 className="text-sm font-semibold text-brand-700 dark:text-brand-300 uppercase tracking-wider mb-3">
           Tipo de Recurso

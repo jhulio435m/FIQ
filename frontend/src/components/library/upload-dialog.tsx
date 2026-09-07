@@ -147,13 +147,15 @@ export function UploadDialog() {
       doi: "",
       isbn: "",
       idioma: "es",
-      licencia: "",
+      licencia: "CC BY 4.0",
       temas: "",
       anio: "",
     },
   })
 
   const selectedIdioma = useWatch({ control: form.control, name: "idioma" }) ?? "es"
+  const selectedLicencia = useWatch({ control: form.control, name: "licencia" }) ?? "CC BY 4.0"
+  const resumenValue = useWatch({ control: form.control, name: "resumen" }) ?? ""
 
   const selectFile = (selectedFile: File | undefined) => {
     if (selectedFile) {
@@ -451,7 +453,12 @@ export function UploadDialog() {
                 <Input
                   id="doi"
                   placeholder="ej. 10.1016/j.env.2026"
-                  {...form.register("doi")}
+                  {...form.register("doi", {
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                      const cleaned = e.target.value.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "").trim()
+                      e.target.value = cleaned
+                    },
+                  })}
                   className={`h-9 text-xs ${form.formState.errors.doi ? "border-red-500 focus-visible:ring-red-400" : ""}`}
                 />
                 {form.formState.errors.doi && (
@@ -517,13 +524,26 @@ export function UploadDialog() {
                 )}
               </div>
               <div className="space-y-1">
-                <Label htmlFor="licencia" className="text-brand-700 dark:text-brand-400 font-semibold text-xs">Licencia (Opcional)</Label>
-                <Input
-                  id="licencia"
-                  placeholder="CC BY 4.0, Uso institucional"
-                  {...form.register("licencia")}
-                  className={`h-9 text-xs ${form.formState.errors.licencia ? "border-red-500 focus-visible:ring-red-400" : ""}`}
-                />
+                <Label htmlFor="licencia" className="text-brand-700 dark:text-brand-400 font-semibold text-xs">
+                  Licencia (Opcional)
+                </Label>
+                <Select
+                  value={selectedLicencia}
+                  onValueChange={(val) => form.setValue("licencia", val ?? undefined, { shouldValidate: true })}
+                >
+                  <SelectTrigger id="licencia" className="h-9 text-xs">
+                    <SelectValue placeholder="Seleccionar licencia..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CC BY 4.0" className="text-xs">CC BY 4.0 (Atribución)</SelectItem>
+                    <SelectItem value="CC BY-SA 4.0" className="text-xs">CC BY-SA 4.0 (Compartir Igual)</SelectItem>
+                    <SelectItem value="CC BY-NC 4.0" className="text-xs">CC BY-NC 4.0 (No Comercial)</SelectItem>
+                    <SelectItem value="CC BY-NC-SA 4.0" className="text-xs">CC BY-NC-SA 4.0 (No Comercial)</SelectItem>
+                    <SelectItem value="Uso Académico UNCP" className="text-xs">Uso Institucional UNCP</SelectItem>
+                    <SelectItem value="Dominio Público" className="text-xs">Dominio Público (CC0)</SelectItem>
+                    <SelectItem value="Derechos Reservados" className="text-xs">Derechos Reservados</SelectItem>
+                  </SelectContent>
+                </Select>
                 {form.formState.errors.licencia && (
                   <p className="text-xs text-red-500 font-medium">{form.formState.errors.licencia.message}</p>
                 )}
@@ -532,10 +552,18 @@ export function UploadDialog() {
 
             {/* Summary */}
             <div className="space-y-1">
-              <Label htmlFor="resumen" className="text-brand-700 dark:text-brand-400 font-semibold text-xs">Resumen (Opcional)</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="resumen" className="text-brand-700 dark:text-brand-400 font-semibold text-xs">
+                  Resumen (Opcional)
+                </Label>
+                <span className={`text-3xs ${resumenValue.length > 1900 ? "text-amber-500 font-semibold" : "text-muted-foreground"}`}>
+                  {resumenValue.length} / 2000
+                </span>
+              </div>
               <Textarea
                 id="resumen"
                 placeholder="Descripción o sinopsis del contenido..."
+                maxLength={2000}
                 {...form.register("resumen")}
                 className={`h-16 text-xs leading-relaxed ${form.formState.errors.resumen ? "border-red-500 focus-visible:ring-red-400" : ""}`}
               />

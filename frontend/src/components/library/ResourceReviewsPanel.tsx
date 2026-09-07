@@ -115,6 +115,7 @@ export function ResourceReviewsPanel({ resourceId }: Props) {
                     <button
                       key={star}
                       type="button"
+                      aria-label={`Calificar con ${star} estrella${star > 1 ? "s" : ""}`}
                       className="cursor-pointer p-0.5"
                       onMouseEnter={() => setHoverRating(star)}
                       onMouseLeave={() => setHoverRating(null)}
@@ -132,13 +133,19 @@ export function ResourceReviewsPanel({ resourceId }: Props) {
                 </div>
               </div>
 
-              <Textarea
-                placeholder="Escribe tu opinión (opcional)..."
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                className="text-xs min-h-[50px] resize-none"
-                rows={2}
-              />
+              <div className="space-y-1">
+                <Textarea
+                  placeholder="Escribe tu opinión (opcional)..."
+                  value={comment}
+                  maxLength={500}
+                  onChange={(e) => setComment(e.target.value.slice(0, 500))}
+                  className="text-xs min-h-[50px] resize-none"
+                  rows={2}
+                />
+                <div className="flex justify-end">
+                  <span className="text-3xs text-muted-foreground">{comment.length} / 500</span>
+                </div>
+              </div>
 
               <div className="flex items-center justify-between pt-1">
                 {myReview ? (

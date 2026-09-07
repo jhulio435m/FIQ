@@ -46,6 +46,14 @@ export function ResourceEditForm({ resource, onCancel, onSave }: Props) {
       toast.error("El título no puede estar vacío")
       return
     }
+    if (editAnio) {
+      const year = Number(editAnio)
+      const maxYear = new Date().getFullYear() + 2
+      if (!Number.isInteger(year) || year < 1800 || year > maxYear) {
+        toast.error(`El año debe ser un número entero entre 1800 y ${maxYear}`)
+        return
+      }
+    }
     setSaving(true)
     try {
       const updated = await updateResource(resource.id, {
@@ -195,8 +203,45 @@ export function ResourceEditForm({ resource, onCancel, onSave }: Props) {
                 Año de Publicación
               </label>
               <Input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={4}
                 value={editAnio}
-                onChange={(e) => setEditAnio(e.target.value)}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, "").slice(0, 4)
+                  setEditAnio(digits)
+                }}
+                onKeyDown={(e) => {
+                  if (
+                    [
+                      "Backspace",
+                      "Delete",
+                      "Tab",
+                      "Escape",
+                      "Enter",
+                      "ArrowLeft",
+                      "ArrowRight",
+                      "ArrowUp",
+                      "ArrowDown",
+                      "Home",
+                      "End",
+                    ].includes(e.key) ||
+                    e.ctrlKey ||
+                    e.metaKey
+                  ) {
+                    return
+                  }
+                  if (!/^\d$/.test(e.key)) {
+                    e.preventDefault()
+                  }
+                }}
+                onPaste={(e) => {
+                  e.preventDefault()
+                  const pasted = e.clipboardData.getData("text")
+                  const digits = pasted.replace(/\D/g, "").slice(0, 4)
+                  setEditAnio(digits)
+                }}
                 className="text-xs"
                 placeholder="ej. 2026"
                 disabled={saving}
@@ -209,7 +254,10 @@ export function ResourceEditForm({ resource, onCancel, onSave }: Props) {
               </label>
               <Input
                 value={editDoi}
-                onChange={(e) => setEditDoi(e.target.value)}
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "").trim()
+                  setEditDoi(cleaned)
+                }}
                 className="text-xs"
                 placeholder="ej. 10.1016/..."
                 disabled={saving}
@@ -224,7 +272,10 @@ export function ResourceEditForm({ resource, onCancel, onSave }: Props) {
               </label>
               <Input
                 value={editIsbn}
-                onChange={(e) => setEditIsbn(e.target.value)}
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(/[^0-9-]/g, "").slice(0, 17)
+                  setEditIsbn(cleaned)
+                }}
                 className="text-xs"
                 placeholder="ej. 9786120000000"
                 disabled={saving}
@@ -234,13 +285,21 @@ export function ResourceEditForm({ resource, onCancel, onSave }: Props) {
               <label className="text-3xs font-semibold text-gray-400 uppercase">
                 Idioma
               </label>
-              <Input
-                value={editIdioma}
-                onChange={(e) => setEditIdioma(e.target.value)}
-                className="text-xs"
-                placeholder="ej. es"
-                disabled={saving}
-              />
+              <Select value={editIdioma || "es"} onValueChange={(val) => setEditIdioma(val ?? "es")} disabled={saving}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Seleccionar idioma..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="es" className="text-xs">Español (es)</SelectItem>
+                  <SelectItem value="en" className="text-xs">Inglés (en)</SelectItem>
+                  <SelectItem value="qu" className="text-xs">Quechua (qu)</SelectItem>
+                  <SelectItem value="pt" className="text-xs">Portugués (pt)</SelectItem>
+                  <SelectItem value="fr" className="text-xs">Francés (fr)</SelectItem>
+                  <SelectItem value="de" className="text-xs">Alemán (de)</SelectItem>
+                  <SelectItem value="it" className="text-xs">Italiano (it)</SelectItem>
+                  <SelectItem value="otro" className="text-xs">Otro</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -261,23 +320,36 @@ export function ResourceEditForm({ resource, onCancel, onSave }: Props) {
               <label className="text-3xs font-semibold text-gray-400 uppercase">
                 Licencia
               </label>
-              <Input
-                value={editLicencia}
-                onChange={(e) => setEditLicencia(e.target.value)}
-                className="text-xs"
-                placeholder="CC BY 4.0"
-                disabled={saving}
-              />
+              <Select value={editLicencia || "CC BY 4.0"} onValueChange={(val) => setEditLicencia(val ?? "")} disabled={saving}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Seleccionar licencia..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CC BY 4.0" className="text-xs">CC BY 4.0 (Atribución)</SelectItem>
+                  <SelectItem value="CC BY-SA 4.0" className="text-xs">CC BY-SA 4.0 (Compartir Igual)</SelectItem>
+                  <SelectItem value="CC BY-NC 4.0" className="text-xs">CC BY-NC 4.0 (No Comercial)</SelectItem>
+                  <SelectItem value="CC BY-NC-SA 4.0" className="text-xs">CC BY-NC-SA 4.0 (No Comercial)</SelectItem>
+                  <SelectItem value="Uso Académico UNCP" className="text-xs">Uso Institucional UNCP</SelectItem>
+                  <SelectItem value="Dominio Público" className="text-xs">Dominio Público (CC0)</SelectItem>
+                  <SelectItem value="Derechos Reservados" className="text-xs">Derechos Reservados</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-3xs font-semibold text-gray-400 uppercase">
-              Resumen / Sinopsis
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-3xs font-semibold text-gray-400 uppercase">
+                Resumen / Sinopsis
+              </label>
+              <span className={`text-3xs ${editSummary.length > 1900 ? "text-amber-500 font-semibold" : "text-muted-foreground"}`}>
+                {editSummary.length} / 2000
+              </span>
+            </div>
             <Textarea
               value={editSummary}
-              onChange={(e) => setEditSummary(e.target.value)}
+              onChange={(e) => setEditSummary(e.target.value.slice(0, 2000))}
+              maxLength={2000}
               className="text-xs min-h-[80px] leading-relaxed"
               disabled={saving}
             />

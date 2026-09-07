@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -9,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "sonner"
-import { Loader2, User, Mail, Lock } from "lucide-react"
+import { Loader2, User, Mail, Lock, Eye, EyeOff } from "lucide-react"
 
 function getErrorMessage(error: unknown) {
   if (typeof error === "object" && error !== null && "response" in error) {
@@ -31,6 +32,7 @@ export default function Perfil() {
   const queryClient = useQueryClient()
   const setAuth = useAuthStore((state) => state.setAuth)
   const token = useAuthStore((state) => state.accessToken)
+  const [showPassword, setShowPassword] = useState(false)
 
   const { data: user, isLoading } = useQuery({
     queryKey: ["me"],
@@ -110,7 +112,23 @@ export default function Perfil() {
               <Label htmlFor="password" className="flex items-center gap-2">
                 <Lock className="h-4 w-4 text-gray-400 dark:text-zinc-500" /> Nueva Contraseña (Opcional)
               </Label>
-              <Input id="password" type="password" placeholder="Dejar en blanco para no cambiar" {...form.register("password")} />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Dejar en blanco para no cambiar"
+                  {...form.register("password")}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Ocultar clave" : "Mostrar clave"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-300 cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               {form.formState.errors.password && (
                 <p className="text-xs text-red-500">{form.formState.errors.password.message}</p>
               )}
