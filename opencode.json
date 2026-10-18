@@ -7,7 +7,11 @@
       ".opencode/skills",
       ".opencode/skills-collections/gentleman-skills/curated",
       ".opencode/skills-collections/opencode-skills/skills",
-      ".opencode/skills-collections/opencode-skills/.opencode/commands"
+      ".opencode/skills-collections/opencode-skills/.opencode/commands",
+      ".opencode/skills-collections/emilkowalski/skills",
+      ".opencode/skills-collections/taste-skill/skills",
+      ".opencode/skills-collections/ponytail/skills",
+      ".opencode/skills-collections/impeccable"
     ]
   },
   "agent": {

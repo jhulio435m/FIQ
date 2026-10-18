@@ -49,13 +49,13 @@ export default function RecuperarContrasena() {
   }
 
   return (
-    <div className="flex min-h-[80vh] items-center justify-center px-4">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-[calc(100vh-14rem)] items-center justify-center px-4 py-8 md:py-12">
+      <Card className="w-full max-w-md shadow-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500 shadow-xs">
             <KeyRound className="h-6 w-6 text-white" />
           </div>
-          <CardTitle className="text-2xl text-brand-700">
+          <CardTitle className="text-2xl text-brand-700 dark:text-brand-400">
             {token ? "Crear nueva contraseña" : "Recuperar contraseña"}
           </CardTitle>
           <CardDescription>

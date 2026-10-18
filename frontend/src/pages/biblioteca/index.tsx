@@ -7,7 +7,6 @@ import { ResourceGrid } from "@/components/library/resource-grid"
 import { ResourceDetail } from "@/components/library/resource-detail"
 import { UploadDialog } from "@/components/library/upload-dialog"
 import { ExternalCatalogPanel } from "@/components/library/external-catalog-panel"
-import { FeaturedResourcesSection } from "@/components/library/FeaturedResourcesSection"
 import { getResource, getResourceCatalog } from "@/services/resources"
 import { useDebounce } from "@/hooks/use-debounce"
 import { Button } from "@/components/ui/button"
@@ -86,12 +85,12 @@ export default function Biblioteca() {
 
   return (
     <div className="animate-fade-in">
-      <div className="sticky top-16 z-40 bg-white/95 dark:bg-zinc-950/95 backdrop-blur border-b border-gray-200 dark:border-zinc-800/80 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="sticky top-16 z-40 bg-white/95 dark:bg-zinc-950/95 backdrop-blur border-b border-gray-200 dark:border-zinc-800/80 shadow-xs">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col md:flex-row md:items-end justify-between gap-3">
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-brand-900 dark:text-brand-100 mb-3">Biblioteca Virtual</h1>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="inline-flex w-fit rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-zinc-800 dark:bg-zinc-900" aria-label="Origen de búsqueda">
+            <h1 className="text-xl md:text-2xl font-bold text-brand-900 dark:text-brand-100 mb-2">Biblioteca Virtual</h1>
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+              <div className="inline-flex w-fit rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-zinc-800 dark:bg-zinc-900 shrink-0" aria-label="Origen de búsqueda">
                 <Button
                   type="button"
                   size="sm"
@@ -112,6 +111,7 @@ export default function Biblioteca() {
                 </Button>
               </div>
               <SearchBar
+                className="flex-1"
                 value={search}
                 onChange={setSearch}
                 placeholder={searchScope === "local"
@@ -133,10 +133,6 @@ export default function Biblioteca() {
           <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">
             El recurso solicitado no existe o todavía no está aprobado.
           </div>
-        )}
-
-        {searchScope === "local" && !debouncedSearch && (
-          <FeaturedResourcesSection onSelect={handleSelect} />
         )}
 
         {searchScope === "local" && (
@@ -174,7 +170,7 @@ export default function Biblioteca() {
                       type="button"
                       onClick={() => setSearch("")}
                       aria-label="Quitar filtro de búsqueda"
-                      className="hover:text-red-500 cursor-pointer ml-1"
+                      className="hover:text-red-500 cursor-pointer ml-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -187,7 +183,7 @@ export default function Biblioteca() {
                       type="button"
                       onClick={() => setTypeFilter("all")}
                       aria-label="Quitar filtro de tipo"
-                      className="hover:text-red-500 cursor-pointer ml-1"
+                      className="hover:text-red-500 cursor-pointer ml-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -200,7 +196,7 @@ export default function Biblioteca() {
                       type="button"
                       onClick={() => setCursoFilter("all")}
                       aria-label="Quitar filtro de curso"
-                      className="hover:text-red-500 cursor-pointer ml-1"
+                      className="hover:text-red-500 cursor-pointer ml-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -227,8 +223,8 @@ export default function Biblioteca() {
         <div className="flex gap-6">
           {facetOpen && (
             <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setFacetOpen(false)}>
-              <div className="absolute inset-0 bg-black/20" />
-              <div className="absolute left-0 top-0 bottom-0 w-72 bg-white dark:bg-zinc-950 dark:border-r dark:border-zinc-800 shadow-xl p-6 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="absolute inset-0 bg-black/20 animate-fade-in" />
+              <div className="absolute left-0 top-0 bottom-0 w-72 bg-white dark:bg-zinc-950 dark:border-r dark:border-zinc-800 shadow-xl p-6 overflow-y-auto animate-drawer-left" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-brand-700 dark:text-brand-300">Filtros</h3>
                   <Button variant="ghost" size="sm" onClick={() => setFacetOpen(false)}>
@@ -252,7 +248,7 @@ export default function Biblioteca() {
           )}
 
           <aside className="hidden lg:block w-56 shrink-0">
-            <div className="sticky top-56 space-y-6">
+            <div className="sticky top-36 space-y-5">
               <FacetPanel
                 tipos={tipos}
                 typeFilter={typeFilter}
@@ -351,7 +347,7 @@ function FacetPanel({
           <button
             key="all-types"
             onClick={() => onTypeChange("all")}
-            className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors cursor-pointer ${
+            className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               typeFilter === "all"
                 ? "bg-brand-50 text-brand-700 dark:bg-brand-950/20 dark:text-brand-300 font-medium"
                 : "text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-900/40"
@@ -363,7 +359,7 @@ function FacetPanel({
             <button
               key={t.id}
               onClick={() => onTypeChange(String(t.id))}
-              className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors cursor-pointer ${
+              className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 typeFilter === String(t.id)
                   ? "bg-brand-50 text-brand-700 dark:bg-brand-950/20 dark:text-brand-300 font-medium"
                   : "text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-900/40"
@@ -383,7 +379,7 @@ function FacetPanel({
           <button
             key="all-courses"
             onClick={() => onCursoChange("all")}
-            className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors cursor-pointer ${
+            className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               cursoFilter === "all"
                 ? "bg-brand-50 text-brand-700 dark:bg-brand-950/20 dark:text-brand-300 font-medium"
                 : "text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-900/40"
@@ -395,7 +391,7 @@ function FacetPanel({
             <button
               key={curso.id}
               onClick={() => onCursoChange(String(curso.id))}
-              className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors cursor-pointer ${
+              className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 cursoFilter === String(curso.id)
                   ? "bg-brand-50 text-brand-700 dark:bg-brand-950/20 dark:text-brand-300 font-medium"
                   : "text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-900/40"

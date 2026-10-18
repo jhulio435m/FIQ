@@ -1,29 +1,26 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Flujo de Laboratorios Interactivos', () => {
-  test('debe cargar la lista de laboratorios y mostrar su información', async ({ page }) => {
+test.describe('Flujo de Soryntel Chemestry (Software de Laboratorio)', () => {
+  test('debe cargar la presentación del software, sus módulos y enlaces de descarga', async ({ page }) => {
     await page.goto('/laboratorios');
-    await expect(page.getByText('Laboratorios Interactivos')).toBeVisible();
-    await expect(page.getByText('Simuladores de ingeniería química con parámetros modificables y resultados en tiempo real.')).toBeVisible();
 
-    // Esperar a que los módulos y el simulador activo se carguen
-    const labCards = page.locator('aside button');
-    await expect(labCards.first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: 'Soryntel Chemestry', level: 1 })).toBeVisible();
+    await expect(page.getByText(/suite integral de simulación computacional/i)).toBeVisible();
 
-    // Verificar que haya al menos uno de los laboratorios esperados (de seed.py)
-    await expect(page.getByText('Operaciones Unitarias I')).toBeVisible();
-    await expect(page.getByText('Cinética Química')).toBeVisible();
-    await expect(page.getByText('Termodinámica')).toBeVisible();
-    await expect(page.getByText('Reactores Químicos')).toBeVisible();
+    // Enlace de descarga oficial (apunta a ejemplo.com)
+    const download = page.getByRole('link', { name: /descargar soryntel chemestry/i }).first();
+    await expect(download).toBeVisible();
+    await expect(download).toHaveAttribute('href', 'https://ejemplo.com');
 
-    // Verificar insignias de dificultad
-    await expect(page.getByText('Básico').first()).toBeVisible();
-    await expect(page.getByText('Intermedio').first()).toBeVisible();
-    await expect(page.getByText('Avanzado').first()).toBeVisible();
+    // Módulos de simulación declarados en el software
+    await expect(page.getByText('Destilación Fraccionada')).toBeVisible();
+    await expect(page.getByText('Cinética Química y Reactores')).toBeVisible();
+    await expect(page.getByText('Equilibrio Líquido-Vapor (ELV)')).toBeVisible();
+    await expect(page.getByText('Balances de Materia y Energía')).toBeVisible();
 
-    await expect(page.getByText('Objetivo')).toBeVisible();
-    await expect(page.getByText('Reflexión').first()).toBeVisible();
-    await page.getByRole('button', { name: /Completar/i }).click();
-    await expect(page.getByText(/Completado/)).toBeVisible();
+    // Secciones informativas de la página
+    await expect(page.getByText('Guía de Instalación Rápida')).toBeVisible();
+    await expect(page.getByText('Requisitos del Sistema')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '¿Listo para comenzar a simular?' })).toBeVisible();
   });
 });

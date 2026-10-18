@@ -28,7 +28,7 @@ export function ResourceCard({ resource, onClick }: Props) {
 
   return (
     <Card
-      className="group p-4 hover:shadow-md hover:border-brand-200 transition-all cursor-pointer"
+      className="group p-4 hover:shadow-md hover:border-brand-200 transition-all active:scale-[0.99] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       onClick={onClick}
       role="button"
       tabIndex={0}
@@ -57,7 +57,7 @@ export function ResourceCard({ resource, onClick }: Props) {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold text-gray-900 truncate group-hover:text-brand-600 transition-colors">
+            <h3 className="font-semibold text-gray-900 dark:text-zinc-100 line-clamp-2 group-hover:text-brand-600 transition-colors">
               {resource.titulo}
             </h3>
             <span className="shrink-0 text-xs font-mono text-gray-400">

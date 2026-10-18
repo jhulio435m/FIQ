@@ -37,7 +37,7 @@ export function ResourceGrid({ resources, isLoading, onSelect }: ResourceGridPro
   }
 
   return (
-    <div className="grid md:grid-cols-2 gap-4">
+    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
       {resources.map((r) => (
         <ResourceCard key={r.id} resource={r} onClick={() => onSelect(r)} />
       ))}

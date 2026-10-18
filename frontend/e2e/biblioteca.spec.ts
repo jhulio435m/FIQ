@@ -137,10 +137,12 @@ test.describe('Flujo de Biblioteca y Descargas', () => {
     await page.locator('form').getByRole('button', { name: 'Ingresar' }).click();
     await expect(page.locator('header')).toContainText('Administrador PRO');
 
-    await page.goto('/biblioteca');
+    // Las colecciones destacadas se muestran en la página de inicio
+    await page.goto('/');
     await expect(page.getByText('Descubrimiento y Colecciones Destacadas')).toBeVisible({ timeout: 15000 });
 
-    // Open first resource
+    // Detalle de recurso con paneles de comunidad
+    await page.goto('/biblioteca');
     await page.getByRole('button', { name: /^Abrir recurso:/ }).first().click();
     await expect(page.getByRole('dialog')).toBeVisible();
 

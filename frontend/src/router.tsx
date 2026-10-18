@@ -24,6 +24,7 @@ export const router = createBrowserRouter([
       { path: "biblioteca", element: <RouteSuspense><BibliotecaPage /></RouteSuspense> },
       { path: "biblioteca/recurso/:resourceId", element: <RouteSuspense><BibliotecaPage /></RouteSuspense> },
       { path: "laboratorios", element: <RouteSuspense><LaboratoriosPage /></RouteSuspense> },
+      { path: "software", element: <RouteSuspense><LaboratoriosPage /></RouteSuspense> },
       {
         element: <ProtectedRoute />,
         children: [
