@@ -1,66 +1,117 @@
-import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import { SlidersHorizontal } from "lucide-react"
 import { SearchBar } from "@/components/library/search-bar"
 import { ResourceFilters } from "@/components/library/resource-filters"
+import { ResourceFacets } from "@/components/library/resource-facets"
+import { ActiveFilters } from "@/components/library/active-filters"
+import { activeFilters } from "@/lib/catalog"
+import { CatalogPagination } from "@/components/library/catalog-pagination"
+import { CatalogEmptyState } from "@/components/library/catalog-empty-state"
 import { ResourceGrid } from "@/components/library/resource-grid"
 import { ResourceDetail } from "@/components/library/resource-detail"
 import { UploadDialog } from "@/components/library/upload-dialog"
 import { ExternalCatalogPanel } from "@/components/library/external-catalog-panel"
-import { getResources } from "@/services/resources"
-import { useDebounce } from "@/hooks/use-debounce"
 import { Button } from "@/components/ui/button"
-import { useAuthStore } from "@/stores/auth"
-import { SlidersHorizontal, X } from "lucide-react"
-import type { Recurso, TipoRecurso } from "@/services/resources"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { getCatalogFacets, searchCatalog } from "@/services/resources"
+import type { Recurso } from "@/services/resources"
+import { CATALOG_PAGE_SIZE, useCatalogParams, type CatalogParams } from "@/hooks/use-catalog-params"
 import { useResourceTypes } from "@/hooks/use-resource-data"
+import { useAuthStore } from "@/stores/auth"
 import { canUpload } from "@/lib/auth"
-
-
+import { searchTerms } from "@/lib/highlight"
 
 export default function Biblioteca() {
-  const [search, setSearch] = useState("")
-  const [typeFilter, setTypeFilter] = useState("all")
-  const [sortBy, setSortBy] = useState("recent")
+  const { params, update, setQuery, clearFilters, apiFilters, activeFilterCount } = useCatalogParams()
   const [selected, setSelected] = useState<Recurso | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
-  const [facetOpen, setFacetOpen] = useState(false)
-  const [cursoFilter, setCursoFilter] = useState("all")
+  const [facetsOpen, setFacetsOpen] = useState(false)
 
   const { user } = useAuthStore()
   const userCanUpload = canUpload(user)
-
-  const debouncedSearch = useDebounce(search, 400)
-
   const { data: tipos = [] } = useResourceTypes()
 
-  const { data: resources = [], isLoading } = useQuery({
-    queryKey: ["resources", debouncedSearch, typeFilter],
+  // El input escribe en un borrador y la URL se actualiza con debounce. Se debouncea
+  // la *escritura* (un temporizador por tecla), no el valor: así nada vuelve a escribir
+  // un borrador viejo cuando la URL cambia por "atrás"/"adelante" (setSearchParams
+  // cambia de identidad en cada navegación y un efecto con el valor debounced lo haría).
+  const [draft, setDraft] = useState(params.q)
+  const pendingWrite = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const lastWrittenQ = useRef(params.q)
+  const setQueryRef = useRef(setQuery)
+  useEffect(() => {
+    setQueryRef.current = setQuery
+  }, [setQuery])
+
+  const writeQuery = (q: string) => {
+    clearTimeout(pendingWrite.current)
+    lastWrittenQ.current = q
+    setQueryRef.current(q)
+  }
+  const handleSearchChange = (value: string) => {
+    setDraft(value)
+    clearTimeout(pendingWrite.current)
+    pendingWrite.current = setTimeout(() => writeQuery(value.trim()), 400)
+  }
+
+  // La URL cambió desde fuera (historial, enlace): el input la sigue...
+  const [syncedQ, setSyncedQ] = useState(params.q)
+  if (params.q !== syncedQ) {
+    setSyncedQ(params.q)
+    if (params.q !== draft.trim()) setDraft(params.q)
+  }
+  // ...y se descarta lo que estuviera pendiente de escribirse.
+  useEffect(() => {
+    if (params.q !== lastWrittenQ.current) {
+      clearTimeout(pendingWrite.current)
+      lastWrittenQ.current = params.q
+    }
+  }, [params.q])
+  useEffect(() => () => clearTimeout(pendingWrite.current), [])
+
+  const catalog = useQuery({
+    queryKey: ["resources", "catalog", apiFilters, params.orden, params.pagina],
     queryFn: () =>
-      getResources({
-        search: debouncedSearch || undefined,
-        tipo_recurso_id: typeFilter !== "all" ? Number(typeFilter) : undefined,
+      searchCatalog({
+        ...apiFilters,
+        sort: params.orden,
+        skip: (params.pagina - 1) * CATALOG_PAGE_SIZE,
+        limit: CATALOG_PAGE_SIZE,
       }),
+    placeholderData: keepPreviousData,
   })
 
-  const cursos = [...new Set(resources.map((r) => r.curso_nombre).filter((c): c is string => c !== null))]
+  const facets = useQuery({
+    queryKey: ["resources", "facets", apiFilters],
+    queryFn: () => getCatalogFacets(apiFilters),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  })
 
-  const filtered = resources
-    .filter((r) => {
-      if (typeFilter !== "all" && r.tipo_recurso_id !== Number(typeFilter)) return false
-      if (cursoFilter !== "all" && r.curso_nombre !== cursoFilter) return false
-      return true
-    })
-    .sort((a, b) => {
-      if (sortBy === "views") return b.visualizaciones - a.visualizaciones
-      if (sortBy === "downloads") return b.descargas - a.descargas
-      if (sortBy === "title") return a.titulo.localeCompare(b.titulo)
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    })
+  const items = catalog.data?.items ?? []
+  const total = catalog.data?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE))
+  const firstShown = total === 0 ? 0 : (params.pagina - 1) * CATALOG_PAGE_SIZE + 1
+  const lastShown = Math.min(params.pagina * CATALOG_PAGE_SIZE, total)
+  const terms = useMemo(() => searchTerms(params.q), [params.q])
+  const filters = activeFilters(params, facets.data)
 
+  const changeFilters = (changes: Partial<CatalogParams>) => update(changes)
+  const goToPage = (pagina: number) => {
+    update({ pagina })
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+  const clearSearch = () => {
+    setDraft("")
+    writeQuery("")
+  }
   const handleSelect = (r: Recurso) => {
     setSelected(r)
     setDetailOpen(true)
   }
+
+  const facetPanel = <ResourceFacets facets={facets.data} params={params} onChange={changeFilters} />
 
   return (
     <div className="animate-fade-in">
@@ -68,7 +119,7 @@ export default function Biblioteca() {
         <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-brand-900 dark:text-brand-100 mb-3">Biblioteca Virtual</h1>
-            <SearchBar value={search} onChange={setSearch} placeholder="Buscar por título, materia, autor..." />
+            <SearchBar value={draft} onChange={handleSearchChange} placeholder="Título, autor, curso, DOI o año…" />
           </div>
           {userCanUpload && (
             <div className="pb-1">
@@ -79,163 +130,79 @@ export default function Biblioteca() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm text-gray-500 dark:text-zinc-400">
-            {isLoading ? "Buscando..." : `${filtered.length} recurso${filtered.length !== 1 ? "s" : ""} encontrado${filtered.length !== 1 ? "s" : ""}`}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <p className="text-sm text-gray-500 dark:text-zinc-400" aria-live="polite">
+            {catalog.isLoading
+              ? "Buscando..."
+              : total === 0
+                ? "Sin resultados"
+                : `Mostrando ${firstShown}–${lastShown} de ${total} recurso${total !== 1 ? "s" : ""}`}
+            {catalog.isFetching && !catalog.isLoading && <span className="ml-2 text-xs text-gray-400">Actualizando…</span>}
           </p>
           <div className="flex items-center gap-3">
-            <ResourceFilters
-              sortBy={sortBy}
-              onSortChange={setSortBy}
-            />
+            <ResourceFilters sortBy={params.orden} onSortChange={(orden) => update({ orden })} />
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setFacetOpen(!facetOpen)}
+              onClick={() => setFacetsOpen(true)}
               className="lg:hidden cursor-pointer"
+              aria-label={activeFilterCount ? `Filtros (${activeFilterCount} activos)` : "Filtros"}
             >
               <SlidersHorizontal className="h-4 w-4 mr-1" />
               Filtros
+              {activeFilterCount > 0 && (
+                <span className="ml-1.5 rounded-full bg-brand-500 px-1.5 text-[10px] font-semibold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
             </Button>
           </div>
         </div>
 
-        <div className="flex gap-6">
-          {facetOpen && (
-            <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setFacetOpen(false)}>
-              <div className="absolute inset-0 bg-black/20" />
-              <div className="absolute left-0 top-0 bottom-0 w-72 bg-white dark:bg-zinc-950 dark:border-r dark:border-zinc-800 shadow-xl p-6 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-brand-700 dark:text-brand-300">Filtros</h3>
-                  <Button variant="ghost" size="sm" onClick={() => setFacetOpen(false)}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                <FacetPanel
-                  tipos={tipos}
-                  typeFilter={typeFilter}
-                  onTypeChange={setTypeFilter}
-                  cursos={cursos}
-                  cursoFilter={cursoFilter}
-                  onCursoChange={setCursoFilter}
-                />
-              </div>
-            </div>
-          )}
+        <div className="mb-4">
+          <ActiveFilters filters={filters} onRemove={changeFilters} onClearAll={clearFilters} />
+        </div>
 
-          <aside className="hidden lg:block w-56 shrink-0">
-            <div className="sticky top-56 space-y-6">
-              <FacetPanel
-                tipos={tipos}
-                typeFilter={typeFilter}
-                onTypeChange={setTypeFilter}
-                cursos={cursos}
-                cursoFilter={cursoFilter}
-                onCursoChange={setCursoFilter}
-              />
-            </div>
+        <Sheet open={facetsOpen} onOpenChange={setFacetsOpen}>
+          <SheetContent side="left" className="overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle className="text-brand-700 dark:text-brand-300">Filtros</SheetTitle>
+            </SheetHeader>
+            <div className="px-4 pb-6">{facetPanel}</div>
+          </SheetContent>
+        </Sheet>
+
+        <div className="flex gap-6">
+          <aside className="hidden lg:block w-60 shrink-0" aria-label="Filtros">
+            <div className="sticky top-56">{facetPanel}</div>
           </aside>
 
           <div className="flex-1 min-w-0">
             <ResourceGrid
-              resources={filtered}
-              isLoading={isLoading}
+              resources={items}
+              isLoading={catalog.isLoading}
               onSelect={handleSelect}
+              terms={terms}
+              emptyState={
+                total > 0 && params.pagina > 1 ? (
+                  <div className="py-14 text-center text-sm text-gray-500 dark:text-zinc-400">
+                    <p>Esta página ya no tiene resultados.</p>
+                    <Button variant="outline" size="sm" className="mt-3 cursor-pointer" onClick={() => goToPage(1)}>
+                      Ir a la primera página
+                    </Button>
+                  </div>
+                ) : (
+                  <CatalogEmptyState query={params.q} filters={filters} onRemove={changeFilters} onClearSearch={clearSearch} />
+                )
+              }
             />
-            <ExternalCatalogPanel query={debouncedSearch} tipos={tipos} canImport={userCanUpload} />
+            <CatalogPagination page={params.pagina} totalPages={totalPages} onChange={goToPage} />
+            <ExternalCatalogPanel query={params.q} tipos={tipos} canImport={userCanUpload} />
           </div>
         </div>
       </div>
 
-      <ResourceDetail
-        resource={selected}
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-      />
-    </div>
-  )
-}
-
-function FacetPanel({
-  tipos,
-  typeFilter,
-  onTypeChange,
-  cursos,
-  cursoFilter,
-  onCursoChange,
-}: {
-  tipos: TipoRecurso[]
-  typeFilter: string
-  onTypeChange: (v: string) => void
-  cursos: string[]
-  cursoFilter: string
-  onCursoChange: (v: string) => void
-}) {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-sm font-semibold text-brand-700 dark:text-brand-300 uppercase tracking-wider mb-3">
-          Tipo de Recurso
-        </h3>
-        <div className="space-y-1">
-          <button
-            key="all-types"
-            onClick={() => onTypeChange("all")}
-            className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors cursor-pointer ${
-              typeFilter === "all"
-                ? "bg-brand-50 text-brand-700 dark:bg-brand-950/20 dark:text-brand-300 font-medium"
-                : "text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-900/40"
-            }`}
-          >
-            Todos
-          </button>
-          {tipos.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => onTypeChange(String(t.id))}
-              className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors cursor-pointer ${
-                typeFilter === String(t.id)
-                  ? "bg-brand-50 text-brand-700 dark:bg-brand-950/20 dark:text-brand-300 font-medium"
-                  : "text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-900/40"
-              }`}
-            >
-              {t.nombre}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-semibold text-brand-700 dark:text-brand-300 uppercase tracking-wider mb-3">
-          Por Curso
-        </h3>
-        <div className="space-y-1">
-          <button
-            key="all-courses"
-            onClick={() => onCursoChange("all")}
-            className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors cursor-pointer ${
-              cursoFilter === "all"
-                ? "bg-brand-50 text-brand-700 dark:bg-brand-950/20 dark:text-brand-300 font-medium"
-                : "text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-900/40"
-            }`}
-          >
-            Todos los cursos
-          </button>
-          {cursos.map((curso) => (
-            <button
-              key={curso}
-              onClick={() => onCursoChange(curso)}
-              className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors cursor-pointer ${
-                cursoFilter === curso
-                  ? "bg-brand-50 text-brand-700 dark:bg-brand-950/20 dark:text-brand-300 font-medium"
-                  : "text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-900/40"
-              }`}
-            >
-              {curso}
-            </button>
-          ))}
-        </div>
-      </div>
+      <ResourceDetail resource={selected} open={detailOpen} onOpenChange={setDetailOpen} />
     </div>
   )
 }

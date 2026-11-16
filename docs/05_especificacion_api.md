@@ -32,7 +32,8 @@ Contrato REST real generado por FastAPI y verificado con `npm run openapi:check`
 | `PATCH /users/{user_id}/role` | Admin | Cambia rol del usuario. |
 | `GET /resources/types` | Publica | Tipos de recurso. |
 | `GET /resources/courses` | Publica | Cursos activos para filtros/upload. |
-| `GET /resources` | Publica | Recursos aprobados con `search`, `tipo_recurso_id`, `curso_id`, `skip`, `limit`. |
+| `GET /resources` | Publica | Recursos aprobados paginados (`search`, `tipo_recurso_id`, `curso_id`, `anio_desde`, `anio_hasta`, `sort`, `skip`, `limit`). Total en `X-Total-Count`. |
+| `GET /resources/facets` | Publica | Conteos por tipo, curso y año para la busqueda actual. |
 | `POST /resources` | Docente/Admin | Upload multipart seguro de PDF. |
 | `POST /resources/init-upload` | Docente/Admin | Inicializa subida directa S3 con metadatos. |
 | `POST /resources/import-external` | Docente/Admin | Importa metadatos desde fuentes externas y crea recurso pendiente. |
@@ -103,13 +104,28 @@ Query params:
 
 | Parametro | Tipo | Descripcion |
 | :--- | :--- | :--- |
-| `search` | string | Busca en titulo/resumen. |
+| `search` | string | Max 200. Se divide en terminos; cada termino debe aparecer en titulo, resumen, autores, editorial, DOI, año, nombre o codigo del curso. Ignora mayusculas y tildes. |
 | `tipo_recurso_id` | int | Filtra por tipo. |
 | `curso_id` | int | Filtra por curso. |
+| `anio_desde` / `anio_hasta` | int | Rango de año de publicacion (1800-2200). |
+| `sort` | enum | `recent` (default), `views`, `downloads`, `title`, `year` (sin año al final). Desempate por `id`: orden estable entre paginas. |
 | `skip` | int | Offset, default `0`. |
-| `limit` | int | Limite, default `20`. |
+| `limit` | int | 1-100, default `20`. |
 
-Response `200`: lista de `RecursoRead` con metadatos bibliograficos, curso/tipo calculados, contadores y fechas.
+Response `200`: lista de `RecursoRead` con metadatos bibliograficos, curso/tipo calculados, contadores y fechas. Cabecera `X-Total-Count` con el total de resultados (para paginar).
+
+### `GET /resources/facets`
+
+Mismos filtros que `GET /resources` (sin `sort`/`skip`/`limit`). Cada faceta ignora su propio filtro, para mostrar cuantos resultados daria elegir otra opcion.
+
+```json
+{
+  "total": 12,
+  "tipos": [{ "id": 1, "nombre": "Libro", "count": 8 }],
+  "cursos": [{ "id": 3, "nombre": "Termodinamica", "count": 5 }],
+  "anios": [{ "anio": 2024, "count": 4 }]
+}
+```
 
 ### `POST /resources`
 

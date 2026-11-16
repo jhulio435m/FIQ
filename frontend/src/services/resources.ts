@@ -32,15 +32,54 @@ export interface Curso {
   nombre: string
 }
 
+export type CatalogSort = "recent" | "views" | "downloads" | "title" | "year"
+
 export interface SearchParams {
   search?: string
   tipo_recurso_id?: number
+  curso_id?: number
+  anio_desde?: number
+  anio_hasta?: number
+  sort?: CatalogSort
   skip?: number
   limit?: number
 }
 
+export interface CatalogPage {
+  items: Recurso[]
+  total: number
+}
+
+export interface FacetCount {
+  id: number
+  nombre: string
+  count: number
+}
+
+export interface CatalogFacets {
+  total: number
+  tipos: FacetCount[]
+  cursos: FacetCount[]
+  anios: { anio: number; count: number }[]
+}
+
 export async function getResources(params: SearchParams = {}) {
   const { data } = await api.get<Recurso[]>("/resources", { params })
+  return data
+}
+
+/** Página del catálogo con el total de resultados (cabecera X-Total-Count). */
+export async function searchCatalog(params: SearchParams): Promise<CatalogPage> {
+  const response = await api.get<Recurso[]>("/resources", { params })
+  const header = response.headers?.["x-total-count"]
+  const total = Number(header)
+  return { items: response.data, total: Number.isFinite(total) && header !== undefined ? total : response.data.length }
+}
+
+export async function getCatalogFacets(
+  params: Omit<SearchParams, "sort" | "skip" | "limit">,
+): Promise<CatalogFacets> {
+  const { data } = await api.get<CatalogFacets>("/resources/facets", { params })
   return data
 }
 

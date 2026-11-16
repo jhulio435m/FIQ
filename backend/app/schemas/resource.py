@@ -85,3 +85,21 @@ class ExternalResourceImport(SQLModel):
     external_url: Optional[str] = None
     open_access_url: Optional[str] = None
     cover_url: Optional[str] = None
+
+
+class FacetCount(SQLModel):
+    id: int
+    nombre: str
+    count: int
+
+
+class YearFacet(SQLModel):
+    anio: int
+    count: int
+
+
+class CatalogFacets(SQLModel):
+    total: int
+    tipos: list[FacetCount]
+    cursos: list[FacetCount]
+    anios: list[YearFacet]
