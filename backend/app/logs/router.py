@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional
 import uuid
 from bson import ObjectId
 from pymongo import DESCENDING

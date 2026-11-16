@@ -2,7 +2,6 @@ import asyncio
 import uuid
 import os
 import logging
-from sqlmodel import SQLModel
 
 from app.core.database import engine, async_session_maker
 from app.core.config import settings
@@ -13,6 +12,11 @@ from app.core.s3 import s3_service
 logger = logging.getLogger(__name__)
 
 async def seed():
+    if settings.is_production_like:
+        raise SystemExit(
+            "Este seed TRUNCA la base de datos y vacía el bucket: prohibido en "
+            f"ENVIRONMENT={settings.ENVIRONMENT}. Usa `python -m app.core.bootstrap`."
+        )
     async with engine.begin() as conn:
         await truncate_all(conn)
 
@@ -39,12 +43,12 @@ async def seed():
         await db.commit()
 
         # Real File Seeding
-        logger.info("Uploading real PDF files to S3/MinIO (Async)...")
+        logger.info("Uploading real PDF files to S3/RustFS (Async)...")
+        # Orígenes del frontend de desarrollo (Vite y nginx local) además de CORS_ORIGINS.
+        await s3_service.ensure_bucket(
+            sorted(set(settings.CORS_ORIGINS) | {"http://localhost:5173", "http://localhost"})
+        )
         async with s3_service.session.client(**s3_service.config) as s3:
-            try:
-                await s3.create_bucket(Bucket=settings.S3_BUCKET_NAME)
-            except Exception as e:
-                logger.warning(f"Bucket creation skipped: {e}")
                 
             existing_objects = await s3.list_objects_v2(Bucket=settings.S3_BUCKET_NAME)
             if "Contents" in existing_objects:

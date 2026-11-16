@@ -16,7 +16,6 @@ describe("Login", () => {
     vi.mocked(login).mockReset()
     vi.mocked(login).mockResolvedValue({
       access_token: "test-token",
-      refresh_token: "refresh-token",
       token_type: "bearer",
       usuario: {
         id: "admin-id",

@@ -1,0 +1,64 @@
+# Migraciones + bootstrap idempotente. El pipeline lo aplica y espera a que
+# termine ANTES de actualizar los Deployments (ver deploy-kubernetes.yml).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fiq-migrate
+  namespace: fiq
+  labels:
+    app.kubernetes.io/name: fiq-migrate
+    app.kubernetes.io/component: migrate
+    app.kubernetes.io/part-of: fiq-platform
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fiq-migrate
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: ghcr.io/jhulio435m/fiq-backend
+          command: ["sh", "-c", "alembic upgrade head && python -m app.core.bootstrap"]
+          envFrom:
+            - configMapRef:
+                name: fiq-config
+            - secretRef:
+                name: fiq-secrets
+          env:
+            # Solo se usan si aún no existe ningún administrador.
+            - name: BOOTSTRAP_ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: fiq-secrets
+                  key: BOOTSTRAP_ADMIN_EMAIL
+                  optional: true
+            - name: BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: fiq-secrets
+                  key: BOOTSTRAP_ADMIN_PASSWORD
+                  optional: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

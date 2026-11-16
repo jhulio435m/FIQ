@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import logging
+
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 import uuid
 import httpx
 import urllib.parse
-from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -13,19 +14,50 @@ from app.core.users import UserManager, get_jwt_strategy, get_user_manager
 from app.api.auth.schemas import LoginRequest, LoginResponse, ForgotPasswordRequest, MicrosoftLoginRequest
 from app.models.user import User
 from app.core.security import hash_password
-from app.models.activity import TipoActividad
 from app.logs.crud import log_activity
 from app.core.cache import get_activity_type_id
+from app.core.rate_limit import enforce_rate_limit, reset_rate_limit
+from app.core.sessions import (
+    clear_refresh_cookie,
+    consume_refresh_token,
+    issue_refresh_token,
+    revoke_refresh_token,
+    set_refresh_cookie,
+)
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _usuario_payload(user: User) -> dict:
+    return {
+        "id": str(user.id),
+        "nombre": user.nombre,
+        "email": user.email,
+        "rol": user.rol,
+        "rol_id": user.rol_id,
+        "rol_nombre": user.rol,
+        "esta_activo": user.esta_activo,
+        "is_superuser": user.is_superuser,
+    }
+
+
+async def _start_session(response: Response, user: User) -> LoginResponse:
+    access_token = await get_jwt_strategy().write_token(user)
+    refresh_token = await issue_refresh_token(user.id)
+    set_refresh_cookie(response, refresh_token)
+    return LoginResponse(access_token=access_token, usuario=_usuario_payload(user))
 
 
 @router.post("/login", response_model=LoginResponse)
 async def login(
     data: LoginRequest,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     user_manager: UserManager = Depends(get_user_manager),
 ):
+    await enforce_rate_limit(request, "login", data.email)
     credentials = OAuth2PasswordRequestForm(
         username=data.email,
         password=data.password,
@@ -45,8 +77,7 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cuenta desactivada",
         )
-    strategy = get_jwt_strategy()
-    access_token = await strategy.write_token(user)
+    await reset_rate_limit(request, "login", data.email)
 
     tipo_id = await get_activity_type_id(db, "login")
     if tipo_id:
@@ -57,24 +88,42 @@ async def login(
             detalle_accion={"email": user.email},
         )
 
-    # TODO: Implement real refresh token flow
-    return LoginResponse(
-        access_token=access_token,
-        usuario={
-            "id": str(user.id),
-            "nombre": user.nombre,
-            "email": user.email,
-            "rol": user.rol,
-            "rol_id": user.rol_id,
-            "rol_nombre": user.rol,
-            "esta_activo": user.esta_activo,
-            "is_superuser": user.is_superuser,
-        },
+    return await _start_session(response, user)
+
+
+@router.post("/refresh", response_model=LoginResponse)
+async def refresh_session(
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    refresh_token: str | None = Cookie(default=None, alias=settings.REFRESH_COOKIE_NAME),
+):
+    # Sin rate limit: el refresh token es un JWT firmado de un solo uso (no adivinable)
+    # y limitar por IP bloquearía a todo el campus detrás del mismo NAT.
+    invalid = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Sesión expirada. Inicia sesión nuevamente.",
     )
+    if not refresh_token:
+        raise invalid
+    user_id = await consume_refresh_token(refresh_token)
+    if user_id is None:
+        clear_refresh_cookie(response)
+        raise invalid
+    user = await db.get(User, user_id)
+    if user is None or not user.is_effectively_active:
+        clear_refresh_cookie(response)
+        raise invalid
+    return await _start_session(response, user)
 
 
 @router.post("/logout")
-async def logout():
+async def logout(
+    response: Response,
+    refresh_token: str | None = Cookie(default=None, alias=settings.REFRESH_COOKIE_NAME),
+):
+    if refresh_token:
+        await revoke_refresh_token(refresh_token)
+    clear_refresh_cookie(response)
     return {"message": "Sesión cerrada correctamente"}
 
 
@@ -106,8 +155,11 @@ async def get_microsoft_authorize_url(redirect_uri: str):
 @router.post("/microsoft", response_model=LoginResponse)
 async def microsoft_login(
     data: MicrosoftLoginRequest,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
+    await enforce_rate_limit(request, "microsoft", multiplier=20)
     if not settings.MICROSOFT_CLIENT_ID or not settings.MICROSOFT_TENANT_ID:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -124,12 +176,13 @@ async def microsoft_login(
         "grant_type": "authorization_code",
     }
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         token_resp = await client.post(token_url, data=token_data)
         if token_resp.status_code != 200:
+            logger.warning("Microsoft token exchange failed: %s %s", token_resp.status_code, token_resp.text[:500])
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Error al obtener token de Microsoft: {token_resp.text}",
+                detail="No se pudo validar el inicio de sesión con Microsoft.",
             )
         token_json = token_resp.json()
         access_token = token_json.get("access_token")
@@ -139,9 +192,10 @@ async def microsoft_login(
         headers = {"Authorization": f"Bearer {access_token}"}
         profile_resp = await client.get(profile_url, headers=headers)
         if profile_resp.status_code != 200:
+            logger.warning("Microsoft Graph profile failed: %s %s", profile_resp.status_code, profile_resp.text[:500])
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Error al obtener perfil de Microsoft: {profile_resp.text}",
+                detail="No se pudo obtener el perfil de Microsoft.",
             )
         profile_json = profile_resp.json()
         
@@ -202,21 +256,4 @@ async def microsoft_login(
             detail="Cuenta desactivada",
         )
 
-    # 5. Generate strategy JWT token
-    strategy = get_jwt_strategy()
-    jwt_token = await strategy.write_token(user)
-
-    # TODO: Implement real refresh token flow
-    return LoginResponse(
-        access_token=jwt_token,
-        usuario={
-            "id": str(user.id),
-            "nombre": user.nombre,
-            "email": user.email,
-            "rol": user.rol,
-            "rol_id": user.rol_id,
-            "rol_nombre": user.rol,
-            "esta_activo": user.esta_activo,
-            "is_superuser": user.is_superuser,
-        },
-    )
+    return await _start_session(response, user)

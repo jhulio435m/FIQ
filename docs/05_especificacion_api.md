@@ -14,15 +14,12 @@ Contrato REST real generado por FastAPI y verificado con `npm run openapi:check`
 
 | Metodo | Ruta | Auth | Uso |
 | :--- | :--- | :--- | :--- |
-| `GET /health` | Publica | Healthcheck de API. |
-| `POST /auth/login` | Publica | Login propio con email/password y respuesta JWT + usuario. |
-| `POST /auth/logout` | JWT | Logout propio. |
-| `POST /auth/jwt/login` | Publica | Login del backend FastAPI Users. |
-| `POST /auth/jwt/logout` | JWT | Logout JWT FastAPI Users. |
-| `POST /auth/cookie/login` | Publica | Login por cookie. |
-| `POST /auth/cookie/logout` | Cookie | Logout cookie. |
+| `GET /health` | Publica | Liveness: el proceso responde (no consulta dependencias). |
+| `GET /health/ready` | Publica | Readiness: PostgreSQL y Redis criticos (503 si fallan); S3 y MongoDB degradan. |
+| `POST /auth/login` | Publica | Login email/password. Devuelve access token + usuario y fija el refresh token en cookie HttpOnly. Rate limited (429). |
+| `POST /auth/refresh` | Cookie refresh | Rota el refresh token (un solo uso) y devuelve un access token nuevo. |
+| `POST /auth/logout` | Cookie refresh | Revoca el refresh token y borra la cookie. |
 | `POST /auth/forgot-password` | Publica | Solicitud de recuperacion. |
-| `POST /auth/register` | Publica | Registro FastAPI Users. |
 | `GET /auth/microsoft/authorize-url` | Publica | URL de autorizacion Microsoft. |
 | `POST /auth/microsoft` | Publica | Login Microsoft con codigo OAuth. |
 | `GET /users` | JWT | Lista usuarios. |
@@ -84,7 +81,6 @@ Response `200`:
 ```json
 {
   "access_token": "jwt",
-  "refresh_token": "jwt",
   "token_type": "bearer",
   "usuario": {
     "id": "uuid",
@@ -95,7 +91,11 @@ Response `200`:
 }
 ```
 
-Errores esperados: `401` credenciales invalidas, `422` payload invalido.
+Ademas fija la cookie `fiq_refresh` (HttpOnly, SameSite=Strict, Secure en staging/produccion) con el refresh token; nunca se devuelve en el body.
+
+Errores esperados: `401` credenciales invalidas, `403` cuenta desactivada, `422` payload invalido, `429` demasiados intentos (incluye `Retry-After`).
+
+El registro publico (`/auth/register`) solo existe si `ALLOW_PUBLIC_REGISTRATION=true` (deshabilitado por defecto). `/docs`, `/redoc` y `/openapi.json` no se publican cuando `ENVIRONMENT` es `staging` o `production`.
 
 ### `GET /resources`
 

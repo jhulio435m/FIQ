@@ -4,8 +4,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.kvstore import close_store
 from app.core.mongo import close_mongo, init_mongo
-from app.core.users import auth_backend_jwt, auth_backend_cookie, fastapi_users
+from app.core.observability import configure_logging, configure_sentry
+from app.core.users import fastapi_users
 from app.schemas.user import UserRead, UserCreate, UserUpdate
 from app.api.auth.router import router as auth_router
 from app.api.resources.router import router as resources_router
@@ -14,10 +16,15 @@ from app.api.labs.router import router as labs_router
 from app.api.external_catalog.router import router as external_catalog_router
 from app.logs.router import router as logs_router
 from app.reports.router import router as reports_router
+from app.api.health import router as health_router
 
 
 from app.core.database import async_session_maker
 from app.core.cache import preload_activity_types
+
+configure_logging()
+configure_sentry()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,13 +35,16 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await close_mongo()
+        await close_store()
 
 
 app = FastAPI(
     title=f"{settings.PROJECT_NAME} (PRO)",
     version=settings.VERSION,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    # En staging/producción la documentación interactiva y el esquema no se publican.
+    docs_url="/docs" if settings.docs_enabled else None,
+    redoc_url="/redoc" if settings.docs_enabled else None,
+    openapi_url="/openapi.json" if settings.docs_enabled else None,
     lifespan=lifespan,
 )
 
@@ -42,33 +52,31 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
+
+if settings.METRICS_ENABLED:
+    from prometheus_fastapi_instrumentator import Instrumentator
+
+    # /metrics no pasa por nginx (bloqueado allí); Prometheus lo raspa directo al pod.
+    Instrumentator(excluded_handlers=["/health", "/health/ready", "/metrics"]).instrument(app).expose(
+        app, include_in_schema=False
+    )
 
 # --- Authentication Routers ---
 app.include_router(auth_router, prefix="/auth", tags=["Autenticación"])
 
-# JWT Auth
-app.include_router(
-    fastapi_users.get_auth_router(auth_backend_jwt),
-    prefix="/auth/jwt",
-    tags=["Autenticación (JWT)"],
-)
+# Los routers /auth/jwt/* y /auth/cookie/* de FastAPI Users no se exponen: duplicaban
+# el login sin rate limiting ni refresh token. /auth/login es la única entrada.
 
-# Cookie Auth
-app.include_router(
-    fastapi_users.get_auth_router(auth_backend_cookie),
-    prefix="/auth/cookie",
-    tags=["Autenticación (Cookie)"],
-)
-
-# Registration
-app.include_router(
-    fastapi_users.get_register_router(UserRead, UserCreate),
-    prefix="/auth",
-    tags=["Autenticación"],
-)
+# Registration: deshabilitado por defecto; las cuentas se crean por SSO institucional o por un Admin.
+if settings.ALLOW_PUBLIC_REGISTRATION:
+    app.include_router(
+        fastapi_users.get_register_router(UserRead, UserCreate),
+        prefix="/auth",
+        tags=["Autenticación"],
+    )
 
 # User Management (Profile & Admin)
 app.include_router(
@@ -89,8 +97,4 @@ app.include_router(external_catalog_router, prefix="/external", tags=["Catálogo
 app.include_router(labs_router, prefix="/labs", tags=["Laboratorios"])
 app.include_router(logs_router, prefix="/activity", tags=["Auditoría"])
 app.include_router(reports_router, prefix="/reports", tags=["Reportes"])
-
-
-@app.get("/health")
-async def health_check():
-    return {"status": "ok", "version": settings.VERSION}
+app.include_router(health_router, tags=["Salud"])

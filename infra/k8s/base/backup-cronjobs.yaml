@@ -10,13 +10,23 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      backoffLimit: 2
       template:
         spec:
           restartPolicy: OnFailure
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: backup
-              image: ghcr.io/jhulio435m/fiq-backup-tools:latest
+              image: ghcr.io/jhulio435m/fiq-backup-tools
               imagePullPolicy: IfNotPresent
+              command: ["bash", "/usr/local/bin/backup_datastores.sh"]
               env:
                 - name: BACKUP_ROOT
                   value: /backups/fiq
@@ -32,9 +42,81 @@ spec:
                     secretKeyRef:
                       name: fiq-backup-secrets
                       key: MONGO_BACKUP_URI
+                      optional: true
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               volumeMounts:
                 - name: backups
                   mountPath: /backups
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: fiq-backups
+---
+# Un backup que nunca se restauró no es un backup. Cada domingo se restaura el
+# más reciente en una base DESECHABLE (RESTORE_TEST_URL) y se validan las tablas.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: datastore-restore-verify
+  namespace: fiq
+spec:
+  schedule: "47 8 * * 0"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: restore-verify
+              image: ghcr.io/jhulio435m/fiq-backup-tools
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/usr/local/bin/restore_verify.sh"]
+              env:
+                - name: BACKUP_ROOT
+                  value: /backups/fiq
+                - name: RESTORE_TEST_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: fiq-backup-secrets
+                      key: RESTORE_TEST_URL
+                      optional: true
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+                  readOnly: true
           volumes:
             - name: backups
               persistentVolumeClaim:

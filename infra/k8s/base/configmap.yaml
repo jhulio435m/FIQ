@@ -5,8 +5,13 @@ metadata:
   namespace: fiq
 data:
   PROJECT_NAME: FIQ Plataforma Digital
+  ENVIRONMENT: production
+  LOG_JSON: "true"
+  LOG_LEVEL: INFO
   REDIS_URL: redis://redis:6379/0
   MONGO_ENABLED: "true"
   MONGO_DB_NAME: fiq_events
   S3_BUCKET_NAME: fiq-recursos
+  # Reemplazar por el dominio real servido por Cloudflare Tunnel.
   CORS_ORIGINS: '["https://fiq.example.edu.pe"]'
+  METRICS_ENABLED: "true"

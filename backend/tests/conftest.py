@@ -1,3 +1,9 @@
+import os
+
+# Los tests no dependen de Redis/Prometheus externos: el almacén cae a memoria.
+os.environ["REDIS_URL"] = ""
+os.environ["ENVIRONMENT"] = "test"
+
 import uuid
 from collections.abc import AsyncGenerator
 
@@ -10,9 +16,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.lab import ModuloLaboratorio, NivelDificultad
 from app.core.database import get_db
+from app.core.kvstore import MemoryStore, set_store
 from app.main import app
 from app.models.activity import TipoActividad
-from app.models.resource import Curso, EstadoRecurso, Recurso, TipoRecurso
+from app.models.resource import Curso, EstadoRecurso, TipoRecurso
 from app.models.user import Rol, User
 
 
@@ -22,6 +29,14 @@ test_engine = create_async_engine(TEST_DATABASE_URL, future=True)
 TestingSessionLocal = sessionmaker(
     test_engine, class_=AsyncSession, expire_on_commit=False
 )
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def kv_store() -> AsyncGenerator[MemoryStore, None]:
+    store = MemoryStore()
+    set_store(store)
+    yield store
+    set_store(None)
 
 
 @pytest_asyncio.fixture(autouse=True)

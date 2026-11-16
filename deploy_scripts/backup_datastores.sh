@@ -60,7 +60,7 @@ backup_postgres() {
       docker.io/library/postgres:17-alpine \
       pg_dump --format=custom --no-owner --no-acl --file="/backup/$(basename "${outfile}")" "${POSTGRES_BACKUP_URL}"
   fi
-  sha256sum "${outfile}" > "${outfile}.sha256"
+  (cd "${workdir}" && sha256sum "$(basename "${outfile}")" > "$(basename "${outfile}").sha256")
 }
 
 backup_mongo() {
@@ -95,7 +95,7 @@ backup_mongo() {
     mkdir -p "${outdir}"
   fi
   tar -C "${workdir}" -czf "${outdir}.tar.gz" "$(basename "${outdir}")"
-  sha256sum "${outdir}.tar.gz" > "${outdir}.tar.gz.sha256"
+  (cd "${workdir}" && sha256sum "$(basename "${outdir}").tar.gz" > "$(basename "${outdir}").tar.gz.sha256")
   rm -rf "${outdir}" 2>/dev/null || {
     echo "Warning: raw MongoDB dump directory kept because cleanup failed: ${outdir}" >&2
   }

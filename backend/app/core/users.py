@@ -32,17 +32,18 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     verification_token_secret = settings.SECRET_KEY
 
     async def on_after_register(self, user: User, request: Optional[Request] = None):
-        logger.info(f"User {user.id} has registered.")
+        logger.info("User %s has registered.", user.id)
 
     async def on_after_forgot_password(
         self, user: User, token: str, request: Optional[Request] = None
     ):
-        logger.info(f"User {user.id} forgot their password. Reset token: {token}")
+        # Nunca registrar el token: cualquiera con acceso a los logs podría tomar la cuenta.
+        logger.info("User %s requested a password reset.", user.id)
 
     async def on_after_request_verify(
         self, user: User, token: str, request: Optional[Request] = None
     ):
-        logger.info(f"Verification requested for user {user.id}. Verification token: {token}")
+        logger.info("Verification requested for user %s.", user.id)
 
 
 async def get_user_manager(user_db=Depends(get_user_db)):
@@ -55,7 +56,11 @@ async def get_user_manager(user_db=Depends(get_user_db)):
 bearer_transport = BearerTransport(tokenUrl="auth/jwt/login")
 
 # 2. Cookie Transport (Secure HttpOnly)
-cookie_transport = CookieTransport(cookie_max_age=3600, cookie_secure=not settings.DEBUG)
+cookie_transport = CookieTransport(
+    cookie_max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    cookie_secure=settings.is_production_like,
+    cookie_samesite="lax",
+)
 
 def get_jwt_strategy() -> JWTStrategy:
     return JWTStrategy(secret=settings.SECRET_KEY, lifetime_seconds=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)

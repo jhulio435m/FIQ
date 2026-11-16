@@ -2,12 +2,68 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
+  namespace: fiq
 spec:
-  replicas: 2
+  replicas: 1
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
+  namespace: fiq
 spec:
   replicas: 1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: fiq
+spec:
+  replicas: 1
+---
+# Sin esto el HPA vuelve a subir las réplicas al mínimo de producción.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend
+  namespace: fiq
+spec:
+  minReplicas: 1
+  maxReplicas: 2
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend
+  namespace: fiq
+spec:
+  minReplicas: 1
+  maxReplicas: 2
+---
+# PDB con minAvailable > réplicas bloquearía los drains de nodos en staging.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend
+  namespace: fiq
+spec:
+  minAvailable: 0
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend
+  namespace: fiq
+spec:
+  minAvailable: 0
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fiq-config
+  namespace: fiq
+data:
+  ENVIRONMENT: staging
+  LOG_LEVEL: DEBUG
+  CORS_ORIGINS: '["https://staging.fiq.example.edu.pe"]'

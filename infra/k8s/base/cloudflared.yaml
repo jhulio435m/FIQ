@@ -1,0 +1,60 @@
+# Entrada pública: Cloudflare Tunnel con nombre (token). El hostname público y
+# su destino (http://frontend:80) se configuran en Cloudflare Zero Trust.
+# Secret requerido: kubectl create secret generic fiq-cloudflared --from-literal=TUNNEL_TOKEN=...
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: fiq
+  labels:
+    app.kubernetes.io/name: cloudflared
+    app.kubernetes.io/part-of: fiq-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudflared
+        app.kubernetes.io/part-of: fiq-platform
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2025.11.1
+          args: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:2000", "run"]
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: fiq-cloudflared
+                  key: TUNNEL_TOKEN
+          ports:
+            - containerPort: 2000
+              name: metrics
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

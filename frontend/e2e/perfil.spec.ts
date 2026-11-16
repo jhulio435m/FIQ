@@ -10,7 +10,7 @@ test.describe('Flujo de Perfil de Usuario', () => {
   test('debe permitir ver y actualizar el perfil del usuario autenticado', async ({ page }) => {
     // 1. Iniciar sesión
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@fiq.uncp.edu.pe');
+    await page.getByLabel('Correo institucional').fill('admin@fiq.uncp.edu.pe');
     await page.getByLabel('Contraseña').fill('admin123');
     await page.locator('form').getByRole('button', { name: 'Ingresar' }).click();
 
