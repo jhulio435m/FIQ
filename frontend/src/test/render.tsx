@@ -7,9 +7,12 @@ export function renderWithProviders(
   ui: ReactElement,
   {
     route = "/",
+    entries,
     options,
   }: {
     route?: string
+    /** Historial inicial; la última entrada es la actual. */
+    entries?: string[]
     options?: Omit<RenderOptions, "wrapper">
   } = {},
 ) {
@@ -22,7 +25,7 @@ export function renderWithProviders(
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+      <MemoryRouter initialEntries={entries ?? [route]} initialIndex={entries ? entries.length - 1 : 0}>{ui}</MemoryRouter>
     </QueryClientProvider>,
     options,
   )

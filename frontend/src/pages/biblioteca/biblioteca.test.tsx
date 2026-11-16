@@ -1,4 +1,5 @@
-import { screen, waitFor } from "@testing-library/react"
+import { act, screen, waitFor } from "@testing-library/react"
+import { useLocation, useNavigate } from "react-router"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -32,6 +33,20 @@ const facets: CatalogFacets = {
   ],
   cursos: [{ id: 1, nombre: "Química General", count: 1 }],
   anios: [{ anio: 2026, count: 1 }],
+}
+
+/** Simula el botón "atrás" del navegador y expone la URL actual. */
+function HistoryHarness() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  return (
+    <>
+      <button type="button" onClick={() => navigate(-1)}>
+        atrás
+      </button>
+      <output data-testid="location">{location.search}</output>
+    </>
+  )
 }
 
 function lastSearchParams() {
@@ -112,5 +127,45 @@ describe("Biblioteca", () => {
     await waitFor(() => expect(lastSearchParams()).toMatchObject({ skip: 24 }))
     expect(await screen.findByText(/mostrando 25–48 de 60 recursos/i)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Página 2" })).toHaveAttribute("aria-current", "page")
+  })
+
+  it("al volver atrás no reescribe la URL con la búsqueda anterior", async () => {
+    renderWithProviders(
+      <>
+        <Biblioteca />
+        <HistoryHarness />
+      </>,
+      { entries: ["/?q=uno", "/?q=dos&tipo=1"] },
+    )
+    await waitFor(() => expect(lastSearchParams()).toMatchObject({ search: "dos" }))
+    // Deja que el debounce inicial se asiente con "dos".
+    await act(() => new Promise((resolve) => setTimeout(resolve, 450)))
+
+    await userEvent.click(screen.getByRole("button", { name: "atrás" }))
+    expect(screen.getByTestId("location")).toHaveTextContent("?q=uno")
+
+    // Pasado el debounce, la URL debe seguir siendo la entrada a la que se volvió.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 600)))
+    expect(screen.getByTestId("location")).toHaveTextContent("?q=uno")
+    expect(screen.getByRole("searchbox")).toHaveValue("uno")
+    expect(lastSearchParams()).toMatchObject({ search: "uno" })
+  })
+
+  it("al volver atrás descarta lo que se estaba escribiendo", async () => {
+    renderWithProviders(
+      <>
+        <Biblioteca />
+        <HistoryHarness />
+      </>,
+      { entries: ["/?q=uno", "/?q=dos"] },
+    )
+    await screen.findByText("Balance de Materia")
+    await userEvent.type(screen.getByRole("searchbox"), "xyz")
+    // Atrás antes de que venza el debounce de lo escrito.
+    await userEvent.click(screen.getByRole("button", { name: "atrás" }))
+
+    await act(() => new Promise((resolve) => setTimeout(resolve, 600)))
+    expect(screen.getByTestId("location")).toHaveTextContent("?q=uno")
+    expect(screen.getByRole("searchbox")).toHaveValue("uno")
   })
 })

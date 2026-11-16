@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { SlidersHorizontal } from "lucide-react"
 import { SearchBar } from "@/components/library/search-bar"
@@ -17,7 +17,6 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { getCatalogFacets, searchCatalog } from "@/services/resources"
 import type { Recurso } from "@/services/resources"
 import { CATALOG_PAGE_SIZE, useCatalogParams, type CatalogParams } from "@/hooks/use-catalog-params"
-import { useDebounce } from "@/hooks/use-debounce"
 import { useResourceTypes } from "@/hooks/use-resource-data"
 import { useAuthStore } from "@/stores/auth"
 import { canUpload } from "@/lib/auth"
@@ -33,18 +32,43 @@ export default function Biblioteca() {
   const userCanUpload = canUpload(user)
   const { data: tipos = [] } = useResourceTypes()
 
-  // El input escribe en un borrador; la URL (y la consulta) se actualiza con debounce.
+  // El input escribe en un borrador y la URL se actualiza con debounce. Se debouncea
+  // la *escritura* (un temporizador por tecla), no el valor: así nada vuelve a escribir
+  // un borrador viejo cuando la URL cambia por "atrás"/"adelante" (setSearchParams
+  // cambia de identidad en cada navegación y un efecto con el valor debounced lo haría).
   const [draft, setDraft] = useState(params.q)
-  const debouncedDraft = useDebounce(draft, 400)
-  // Si la URL cambia desde fuera (atrás/adelante, "Borrar búsqueda"), el input la sigue.
+  const pendingWrite = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const lastWrittenQ = useRef(params.q)
+  const setQueryRef = useRef(setQuery)
+  useEffect(() => {
+    setQueryRef.current = setQuery
+  }, [setQuery])
+
+  const writeQuery = (q: string) => {
+    clearTimeout(pendingWrite.current)
+    lastWrittenQ.current = q
+    setQueryRef.current(q)
+  }
+  const handleSearchChange = (value: string) => {
+    setDraft(value)
+    clearTimeout(pendingWrite.current)
+    pendingWrite.current = setTimeout(() => writeQuery(value.trim()), 400)
+  }
+
+  // La URL cambió desde fuera (historial, enlace): el input la sigue...
   const [syncedQ, setSyncedQ] = useState(params.q)
   if (params.q !== syncedQ) {
     setSyncedQ(params.q)
-    if (params.q !== debouncedDraft) setDraft(params.q)
+    if (params.q !== draft.trim()) setDraft(params.q)
   }
+  // ...y se descarta lo que estuviera pendiente de escribirse.
   useEffect(() => {
-    setQuery(debouncedDraft.trim())
-  }, [debouncedDraft, setQuery])
+    if (params.q !== lastWrittenQ.current) {
+      clearTimeout(pendingWrite.current)
+      lastWrittenQ.current = params.q
+    }
+  }, [params.q])
+  useEffect(() => () => clearTimeout(pendingWrite.current), [])
 
   const catalog = useQuery({
     queryKey: ["resources", "catalog", apiFilters, params.orden, params.pagina],
@@ -80,7 +104,7 @@ export default function Biblioteca() {
   }
   const clearSearch = () => {
     setDraft("")
-    setQuery("")
+    writeQuery("")
   }
   const handleSelect = (r: Recurso) => {
     setSelected(r)
@@ -95,7 +119,7 @@ export default function Biblioteca() {
         <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-brand-900 dark:text-brand-100 mb-3">Biblioteca Virtual</h1>
-            <SearchBar value={draft} onChange={setDraft} placeholder="Título, autor, curso, DOI o año…" />
+            <SearchBar value={draft} onChange={handleSearchChange} placeholder="Título, autor, curso, DOI o año…" />
           </div>
           {userCanUpload && (
             <div className="pb-1">
