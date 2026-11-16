@@ -20,7 +20,7 @@
     "@commitlint/config-conventional": "^21.0.2",
     "@faker-js/faker": "^10.4.0",
     "@fontsource-variable/geist": "^5.2.9",
-    "@hookform/resolvers": "^4.0.0",
+    "@hookform/resolvers": "^5.9.2",
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-table": "^8.21.3",
     "axios": "^1.17.0",

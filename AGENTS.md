@@ -2,7 +2,7 @@
 
 ## Stack
 - **Frontend:** React 19 + TypeScript 6 + Vite 8 + Tailwind v4 + shadcn/ui v4
-- **Backend:** FastAPI + SQLAlchemy 2.0 + PostgreSQL 17 + Redis 7
+- **Backend:** FastAPI + SQLAlchemy 2.0 + PostgreSQL 17 + Redis 7 + RustFS (S3)
 - **Auth:** JWT (access + refresh tokens) + RBAC (Admin/Docente/Estudiante)
 - **Infra:** Docker Compose (dev) → Kubernetes (prod) + Cloudflare Tunnel
 - **Testing:** Vitest + RTL (unit), Playwright (E2E), Pytest (backend)
@@ -14,6 +14,7 @@
 - No subir secretos, `.env` o binarios grandes
 - No usar `any` en TypeScript
 - No comentarios genéricos tipo `// TODO` sin contexto
+- No correr `app.core.seed` fuera de desarrollo (trunca tablas y vacía el bucket); en staging/prod usar `app.core.bootstrap`
 
 ## Layout (Backend)
 ```
@@ -61,7 +62,10 @@ Primario: brand-500 #ac2c2d (rojo institucional FIQ)
 Usar bg-brand-500, text-brand-700, hover:bg-brand-600, etc.
 
 ## Endpoints activos
-- `POST /auth/login` — login JWT (access + refresh)
+- `POST /auth/login` — login JWT (access en body, refresh en cookie HttpOnly; rate limited)
+- `POST /auth/refresh` — rota el refresh token y emite un access token nuevo
+- `POST /auth/logout` — revoca el refresh token
+- `GET /health` (liveness) · `GET /health/ready` (readiness: Postgres + Redis)
 - `GET /resources/types` — tipos de recurso (dinámico)
 - `GET /resources` — lista recursos aprobados (search, tipo_recurso_id)
 - `POST /resources/{id}/view` — incrementa vistas

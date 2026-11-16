@@ -1,12 +1,24 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+# secrets.example.yaml NO se incluye: aplicarlo pisaría los secretos reales con
+# placeholders. Los Secret se crean fuera del repo (ver infra/k8s/README.md).
 resources:
   - configmap.yaml
-  - secrets.example.yaml
+  - redis.yaml
+  - migrate-job.yaml
   - backend-deployment.yaml
   - frontend-deployment.yaml
+  - cloudflared.yaml
   - services.yaml
   - hpa.yaml
   - pdb.yaml
   - network-policies.yaml
+  - backup-pvc.yaml
   - backup-cronjobs.yaml
+images:
+  - name: ghcr.io/jhulio435m/fiq-backend
+    newTag: replaced-by-pipeline
+  - name: ghcr.io/jhulio435m/fiq-frontend
+    newTag: replaced-by-pipeline
+  - name: ghcr.io/jhulio435m/fiq-backup-tools
+    newTag: replaced-by-pipeline

@@ -3,7 +3,6 @@ import type { Usuario } from "@/types/user"
 
 export interface LoginResponse {
   access_token: string
-  refresh_token: string
   token_type: string
   usuario: Usuario
 }
@@ -14,7 +13,8 @@ export async function login(data: { email: string; password: string }) {
 }
 
 export async function logout() {
-  await api.post("/auth/jwt/logout")
+  // Revoca el refresh token (cookie HttpOnly) en el servidor.
+  await api.post("/auth/logout")
 }
 
 export async function getMicrosoftAuthorizeUrl(redirectUri: string) {

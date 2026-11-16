@@ -11,12 +11,12 @@ Revision ejecutada contra la documentacion `docs/01` a `docs/07`, `README.md`, `
 | Monorepo y tooling | Implementado | `package.json`, `frontend/package.json`, `backend/pyproject.toml`, hooks Husky y commitlint. |
 | Backend FastAPI | Implementado con deuda menor | Routers activos para auth, users, resources, labs, activity y reports. |
 | Frontend React | Implementado con deuda de pruebas unitarias | Rutas para home, login, biblioteca, laboratorios, perfil y admin. |
-| Docker Compose local | Implementado | Servicios backend, frontend, postgres, redis y minio. PostgreSQL expuesto en `5433`. |
+| Docker Compose local | Implementado | Servicios backend, frontend, postgres, redis, mongo y rustfs. PostgreSQL expuesto en `5433`. |
 | CI base | Implementado | `.github/workflows/ci.yml` ejecuta backend tests, lint, build y Playwright. |
 | Biblioteca digital | Implementada | Search, tipos, cursos, detalle, preview PDF, upload, tracking y moderacion. |
 | Laboratorios | Implementado como catalogo | Lista y detalle de modulos; falta experiencia interactiva real por modulo. |
 | Auditoria y reportes | Implementacion inicial | Logs y reportes agregados disponibles para Admin. |
-| Infra productiva | Parcial | Existe `render.yaml`; faltan manifiestos Kubernetes, Cloudflare Tunnel, backup y observabilidad reales. |
+| Infra productiva | Implementado (pendiente validar en clúster) | Manifiestos `infra/k8s/`, Cloudflare Tunnel, backups con restore verificado y observabilidad básica. |
 
 ## Brechas cerradas en esta revision
 
@@ -26,6 +26,20 @@ Revision ejecutada contra la documentacion `docs/01` a `docs/07`, `README.md`, `
 | El seed no tenia tipo de actividad para archivado. | Se agrego `resource_archive` al seed. | El archivado puede quedar trazado cuando la tabla de tipos esta poblada. |
 | `.env.example` apuntaba a Postgres `5432`, pero Compose publica `5433`. | Se actualizo `DATABASE_URL` a `localhost:5433`. | El backend local usa el puerto correcto con el Compose actual. |
 | Habia `any` en TypeScript. | Se tiparon errores Axios y wrapper minimo de PDF.js. | Se alinea con AGENTS y Definition of Done. |
+
+## Preparación para producción (rama `chore/prod-readiness`)
+
+| Área | Cambio |
+| :--- | :--- |
+| Entrega | Workflow `Build & Deploy`: CI → imágenes en GHCR con tag `sha-<commit>` → Job de migraciones (espera a que termine) → rollout. Staging automático en `main`, producción manual con aprobación. |
+| Secretos | `secrets.example.yaml` fuera de la kustomization; validador de configuración que aborta el arranque con secretos de desarrollo, CORS `*`, sin Redis o con `DEBUG`. |
+| Datos | `app.core.bootstrap` idempotente (catálogos, primer admin desde env, bucket + CORS). `app.core.seed` bloqueado fuera de desarrollo (truncaba tablas y vaciaba el bucket). |
+| Auth | Refresh token en cookie HttpOnly con rotación y revocación (Redis), `/auth/refresh`, logout real, rate limiting, registro público deshabilitado, routers duplicados `/auth/jwt|cookie/*` retirados, tokens de reset fuera de los logs. |
+| Contenedores | Backend multi-stage con `uv.lock`, usuario no root, `--proxy-headers`; frontend `nginx-unprivileged` (8080), `VITE_API_URL` como build arg, cabeceras de seguridad, CSP, gzip, cache de assets, `client_max_body_size`. |
+| Kubernetes | Redis, Cloudflare Tunnel con nombre, securityContext restrictivo, readiness `/health/ready`, NetworkPolicies, overlay de staging corregido. |
+| Almacenamiento | MinIO reemplazado por RustFS (MinIO dejó de publicar imágenes libres). |
+| Operación | Logs JSON, métricas Prometheus, Sentry opcional, imagen `fiq-backup-tools`, restore verificado semanal. |
+| Limpieza | Eliminados `render.yaml`, `deploy_to_vps.sh` (obsoleto, hacía `down -v`), `requirements.txt` y artefactos de Playwright versionados. |
 
 ## Brechas pendientes por prioridad
 
@@ -52,7 +66,7 @@ Revision ejecutada contra la documentacion `docs/01` a `docs/07`, `README.md`, `
 | :--- | :--- | :--- | :--- |
 | P2-01 | Manifiestos Kubernetes aún no implementados; ya existe ruta `infra/k8s/` y plan HA. | No se cumple todavía el destino dev -> Kubernetes prod. | Completar `infra/k8s/` con deployments, services, ingress, configmaps, external secrets y probes. |
 | P2-02 | Cloudflare Tunnel esta documentado, pero no configurado en repo. | Falta evidencia de acceso Zero Trust. | Agregar plantilla `cloudflared` y guia de variables sin secretos. |
-| P2-03 | Backups y restore no estan automatizados. | Riesgo operativo para PostgreSQL y MinIO/S3. | Documentar job de backup, retencion, prueba de restore y versionamiento de bucket. |
+| P2-03 | Backups y restore no estan automatizados. | Riesgo operativo para PostgreSQL y RustFS/S3. | Documentar job de backup, retencion, prueba de restore y versionamiento de bucket. |
 | P2-04 | Observabilidad minima no esta materializada. | No hay trazabilidad operacional de latencia, errores ni disponibilidad. | Agregar health checks extendidos, metricas basicas y logging estructurado centralizable. |
 
 ## Recomendacion de continuidad

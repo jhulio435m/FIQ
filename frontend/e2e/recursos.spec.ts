@@ -6,7 +6,7 @@ test.describe('Flujo de Gestión de Recursos Académicos', () => {
   test('debe permitir a un usuario autorizado subir un recurso y a un admin aprobarlo', async ({ page }) => {
     // 1. Iniciar sesión como administrador (quien tiene permisos de Docente/Admin para subir)
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@fiq.uncp.edu.pe');
+    await page.getByLabel('Correo institucional').fill('admin@fiq.uncp.edu.pe');
     await page.getByLabel('Contraseña').fill('admin123');
     await page.locator('form').getByRole('button', { name: 'Ingresar' }).click();
 
@@ -21,7 +21,7 @@ test.describe('Flujo de Gestión de Recursos Académicos', () => {
     await expect(page.getByText('Subir Recurso Académico')).toBeVisible();
 
     // 4. Cargar archivo simulado
-    const pdfPath = path.resolve(process.cwd(), '../documento de prueba.pdf');
+    const pdfPath = path.resolve(process.cwd(), '../backend/seed_files/documento_de_prueba.pdf');
     const mockPdfBuffer = fs.readFileSync(pdfPath);
     await page.setInputFiles('input[type="file"]', {
       name: 'documento_de_prueba.pdf',

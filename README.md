@@ -4,7 +4,7 @@ Biblioteca virtual y plataforma academica para la Facultad de Ingenieria Quimica
 
 ## Stack
 
-- Backend: FastAPI, SQLModel/SQLAlchemy, PostgreSQL, MongoDB, Redis, MinIO/S3, Alembic, UV.
+- Backend: FastAPI, SQLModel/SQLAlchemy, PostgreSQL, MongoDB, Redis, RustFS (S3), Alembic, UV.
 - Frontend: React 19, TypeScript 6, Vite 8, Tailwind v4, shadcn/ui, TanStack Query, Zustand.
 - Testing: Pytest, Vitest + React Testing Library + MSW, Playwright.
 - Infra local: Docker Compose.
@@ -22,6 +22,7 @@ Usar `backend/.env.example` como base. No subir `.env`, `.env.prod`, llaves priv
 
 Variables principales:
 
+- `ENVIRONMENT` (`development` | `test` | `staging` | `production`). En `staging`/`production` el backend valida la configuración y **no arranca** con secretos de desarrollo, sin `REDIS_URL` o con `CORS_ORIGINS=["*"]`; además oculta `/docs`, `/redoc` y `/openapi.json`.
 - `DATABASE_URL`
 - `REDIS_URL`
 - `MONGO_ENABLED`
@@ -40,19 +41,28 @@ Variables principales:
 - `EXTERNAL_API_EMAIL` para uso identificado de OpenAlex/Crossref y habilitar Unpaywall.
 - `EXTERNAL_API_USER_AGENT` para identificar la plataforma ante APIs bibliograficas abiertas.
 - `EXTERNAL_CACHE_TTL_SECONDS` para controlar la vida util del cache Mongo de catalogo externo.
+- `AUTH_RATE_LIMIT_ATTEMPTS` / `AUTH_RATE_LIMIT_WINDOW_SECONDS`: límite de intentos fallidos en `/auth/login` (por IP + email; un login exitoso lo reinicia) y en `/auth/microsoft` (por IP, umbral ×20 por el NAT del campus).
+- `ALLOW_PUBLIC_REGISTRATION` (por defecto `false`).
+- `SENTRY_DSN`, `LOG_JSON`, `METRICS_ENABLED` (`/metrics` para Prometheus, bloqueado en nginx).
+
+## Producción
+
+- **Kubernetes (camino principal):** workflow `Build & Deploy` → ver [`infra/k8s/README.md`](infra/k8s/README.md).
+- **Un solo VPS (fallback):** `./deploy_main.sh` con `docker-compose.prod.yml` (migraciones automáticas, Cloudflare Tunnel con nombre, RustFS local o S3 externo).
+- El primer administrador se crea con `python -m app.core.bootstrap` (idempotente, lo ejecutan ambos caminos). `app.core.seed` **trunca la base y vacía el bucket**: solo desarrollo, y se niega a correr en staging/producción.
 
 ## Desarrollo local
 
 Infraestructura:
 
 ```bash
-docker compose up -d postgres redis minio
+docker compose up -d postgres redis rustfs
 ```
 
 Para probar la arquitectura de doble base de datos:
 
 ```bash
-docker compose up -d postgres mongo redis minio
+docker compose up -d postgres mongo redis rustfs
 ```
 
 Backend:
@@ -154,7 +164,7 @@ Los resultados externos se normalizan a metadatos comunes: titulo, autores, edit
 - Si `pytest` global no existe, usar `uv run --extra dev pytest`.
 - Si UV no puede escribir cache fuera del sandbox, usar `UV_CACHE_DIR=/tmp/fiq-uv-cache`.
 - En Arch, `npx playwright install --with-deps` intenta usar `apt-get`; usar `npx playwright install` y resolver dependencias del sistema con el gestor de paquetes local.
-- Si Docker Compose queda esperando frontend, revisar primero `backend` healthcheck y logs de Postgres/MinIO.
+- Si Docker Compose queda esperando frontend, revisar primero `backend` healthcheck y logs de Postgres/RustFS.
 
 ## Documentacion
 

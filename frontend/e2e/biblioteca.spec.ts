@@ -27,7 +27,7 @@ test.describe('Flujo de Biblioteca y Descargas', () => {
 
   test('debe permitir login y descarga exitosa', async ({ page }) => {
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@fiq.uncp.edu.pe');
+    await page.getByLabel('Correo institucional').fill('admin@fiq.uncp.edu.pe');
     await page.getByLabel('Contraseña').fill('admin123');
     await page.locator('form').getByRole('button', { name: 'Ingresar' }).click();
     
@@ -46,7 +46,7 @@ test.describe('Flujo de Biblioteca y Descargas', () => {
 
   test('debe permitir a un admin ver el panel de administración', async ({ page }) => {
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@fiq.uncp.edu.pe');
+    await page.getByLabel('Correo institucional').fill('admin@fiq.uncp.edu.pe');
     await page.getByLabel('Contraseña').fill('admin123');
     await page.locator('form').getByRole('button', { name: 'Ingresar' }).click();
     await expect(page.locator('header')).toContainText('Administrador PRO');

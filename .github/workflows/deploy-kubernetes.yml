@@ -1,12 +1,18 @@
-name: Deploy Kubernetes
+name: Build & Deploy
+
+# - push a main      → CI → build/push de imágenes (tag = SHA) → deploy a staging.
+# - workflow_dispatch → CI → build/push → deploy al entorno elegido.
+#   Producción debe tener "Required reviewers" en Settings → Environments → production.
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
         description: "Target environment"
         required: true
-        default: "production"
+        default: "staging"
         type: choice
         options:
           - staging
@@ -17,22 +23,89 @@ permissions:
   packages: write
 
 concurrency:
-  group: deploy-${{ inputs.environment }}
+  group: deploy-${{ inputs.environment || 'staging' }}
   cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/jhulio435m
+  IMAGE_TAG: sha-${{ github.sha }}
 
 jobs:
   validate:
     uses: ./.github/workflows/ci.yml
 
-  deploy:
+  build:
     needs: validate
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - image: fiq-backend
+            context: backend
+            file: backend/Dockerfile
+          - image: fiq-frontend
+            context: frontend
+            file: frontend/Dockerfile
+          - image: fiq-backup-tools
+            context: .
+            file: infra/backup/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.image }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: true
+          # Tag inmutable por commit: el rollout siempre sabe exactamente qué corre.
+          tags: ${{ env.IMAGE_PREFIX }}/${{ matrix.image }}:${{ env.IMAGE_TAG }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          provenance: true
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
     timeout-minutes: 30
     env:
+      TARGET_ENV: ${{ inputs.environment || 'staging' }}
       TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Render manifests with image tag
+        run: |
+          set -euo pipefail
+          case "$TARGET_ENV" in
+            staging) NAMESPACE=fiq-staging ;;
+            production) NAMESPACE=fiq-prod ;;
+            *) echo "Entorno desconocido: $TARGET_ENV" >&2; exit 1 ;;
+          esac
+          echo "NAMESPACE=$NAMESPACE" >> "$GITHUB_ENV"
+          mkdir -p rendered
+          kubectl kustomize "infra/k8s/overlays/$TARGET_ENV" \
+            | sed "s/:replaced-by-pipeline/:${IMAGE_TAG}/g" > rendered/all.yaml
+          if grep -q "replaced-by-pipeline" rendered/all.yaml; then
+            echo "Quedaron imágenes sin tag" >&2; exit 1
+          fi
+          # Orden de aplicación: infraestructura → migraciones → aplicaciones.
+          ./deploy_scripts/split_manifests.sh rendered/all.yaml rendered
 
       - name: Connect to Tailnet
         if: env.TAILSCALE_AUTHKEY != ''
@@ -48,11 +121,39 @@ jobs:
           DEPLOY_KNOWN_HOSTS: ${{ secrets.K8S_KNOWN_HOSTS }}
         run: ./deploy_scripts/github_actions_ssh_setup.sh
 
-      - name: Sync Kubernetes manifests
+      - name: Upload rendered manifests
         run: |
-          ssh fiq-deploy-target "mkdir -p ~/FIQ/infra"
-          scp -r infra/k8s fiq-deploy-target:~/FIQ/infra/
+          ssh fiq-deploy-target "mkdir -p ~/fiq-deploy/${TARGET_ENV}"
+          scp rendered/1-infra.yaml rendered/2-migrate.yaml rendered/3-apps.yaml "fiq-deploy-target:~/fiq-deploy/${TARGET_ENV}/"
 
-      - name: Apply Kubernetes manifests
+      - name: Apply infrastructure
+        run: ssh fiq-deploy-target "kubectl apply -f ~/fiq-deploy/${TARGET_ENV}/1-infra.yaml"
+
+      - name: Run migrations
         run: |
-          ssh fiq-deploy-target "cd ~/FIQ && kubectl apply -k infra/k8s/overlays/${{ inputs.environment }}"
+          ssh fiq-deploy-target bash -s <<EOF
+          set -euo pipefail
+          kubectl -n ${NAMESPACE} delete job fiq-migrate --ignore-not-found --wait=true
+          kubectl apply -f ~/fiq-deploy/${TARGET_ENV}/2-migrate.yaml
+          if ! kubectl -n ${NAMESPACE} wait --for=condition=complete job/fiq-migrate --timeout=600s; then
+            kubectl -n ${NAMESPACE} logs job/fiq-migrate --tail=200 || true
+            exit 1
+          fi
+          kubectl -n ${NAMESPACE} logs job/fiq-migrate --tail=50
+          EOF
+
+      - name: Roll out applications
+        run: |
+          ssh fiq-deploy-target bash -s <<EOF
+          set -euo pipefail
+          kubectl apply -f ~/fiq-deploy/${TARGET_ENV}/3-apps.yaml
+          for deploy in redis backend frontend cloudflared; do
+            kubectl -n ${NAMESPACE} rollout status deployment/\$deploy --timeout=300s
+          done
+          EOF
+
+      - name: Rollback hint on failure
+        if: failure()
+        run: |
+          echo "Para revertir: kubectl -n ${NAMESPACE} rollout undo deployment/backend deployment/frontend"
+          echo "o relanzar este workflow sobre el commit anterior."

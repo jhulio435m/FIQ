@@ -1,72 +1,147 @@
+# Despliegue de un solo VPS (fallback de Kubernetes). PostgreSQL HA corre aparte
+# (ha-database/, HAProxy en el host :5000). Uso: ./deploy_main.sh
+#
+# Variables obligatorias en .env.prod (deploy_main.sh las genera / valida):
+#   DATABASE_URL, SECRET_KEY, S3_*, CORS_ORIGINS, TUNNEL_TOKEN, BOOTSTRAP_ADMIN_*
+# Almacenamiento: RustFS local con `--profile storage` (por defecto en deploy_main.sh)
+# o cualquier S3 externo definiendo S3_ENDPOINT.
+
+x-backend-env: &backend-env
+  ENVIRONMENT: production
+  LOG_JSON: "true"
+  DATABASE_URL: ${DATABASE_URL:?DATABASE_URL requerido}
+  REDIS_URL: redis://redis:6379/0
+  SECRET_KEY: ${SECRET_KEY:?SECRET_KEY requerido}
+  S3_ENDPOINT: ${S3_ENDPOINT:-http://rustfs:9000}
+  S3_PUBLIC_URL: ${S3_PUBLIC_URL:-}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY requerido}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY requerido}
+  S3_BUCKET_NAME: ${S3_BUCKET_NAME:-fiq-recursos}
+  CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS requerido, p. ej. ["https://fiq.uncp.edu.pe"]}
+  MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+  MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
 services:
-  backend:
+  migrate:
+    <<: *hardening
+    image: ${BACKEND_IMAGE:-fiq-backend:local}
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    restart: always
+    restart: "no"
+    command: ["sh", "-c", "alembic upgrade head && python -m app.core.bootstrap"]
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@haproxy:5000/${POSTGRES_DB}
-      - REDIS_URL=${REDIS_URL}
-      - SECRET_KEY=${SECRET_KEY}
-      - S3_ENDPOINT=${S3_ENDPOINT}
-      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
-      - S3_SECRET_KEY=${S3_SECRET_KEY}
-      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
-      - CORS_ORIGINS=${CORS_ORIGINS}
+      <<: *backend-env
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
-        condition: service_started
-      minio:
+        condition: service_healthy
+      # Solo si se levantó con --profile storage (RustFS local).
+      rustfs:
+        condition: service_healthy
+        required: false
+
+  backend:
+    <<: *hardening
+    image: ${BACKEND_IMAGE:-fiq-backend:local}
+    build:
+      context: ./backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment: *backend-env
+    # HAProxy de ha-database usa network_mode: host → se alcanza por el gateway del host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=4)"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
         condition: service_healthy
 
   frontend:
+    <<: *hardening
+    image: ${FRONTEND_IMAGE:-fiq-frontend:local}
     build:
       context: ./frontend
-      dockerfile: Dockerfile
       target: production
-    restart: always
-    environment:
-      - VITE_API_URL=${VITE_API_URL}
+      args:
+        VITE_API_URL: /api
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   redis:
-    image: redis:7-alpine
-    restart: always
-    volumes:
-      - redis_data:/data
+    <<: *hardening
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "volatile-ttl"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  minio:
-    image: minio/minio:latest
-    restart: always
+  # Almacenamiento S3-compatible local (RustFS). Omítelo con un S3 externo
+  # definiendo S3_ENDPOINT y levantando sin `--profile storage`.
+  rustfs:
+    <<: *hardening
+    profiles: ["storage"]
+    image: rustfs/rustfs:1.0.5
     environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY}
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      # Consola deshabilitada en producción: administrar por S3 API / CLI.
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_OBS_LOGGER_LEVEL: warn
     volumes:
-      - minio_data:/data
-    command: server /data --console-address ":9001"
+      - rustfs_data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/health >/dev/null"]
+      interval: 15s
       timeout: 5s
       retries: 5
+      start_period: 20s
 
-  # Cloudflare Tunnel (TryCloudflare)
+  # Túnel con nombre (no TryCloudflare): URL estable y dominio propio.
+  # En Cloudflare Zero Trust: Public Hostname → http://frontend:8080
   tunnel:
-    image: cloudflare/cloudflared:latest
-    restart: always
-    command: tunnel --url http://frontend:80
+    <<: *hardening
+    image: cloudflare/cloudflared:2025.11.1
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN requerido (Cloudflare Zero Trust → Tunnels)}
+    depends_on:
+      frontend:
+        condition: service_healthy
 
 volumes:
-  redis_data:
-  minio_data:
-
-networks:
-  default:
-    external: true
-    name: fiq-network
+  rustfs_data:

@@ -18,7 +18,7 @@ class S3Service:
             "endpoint_url": settings.S3_ENDPOINT,
             "aws_access_key_id": settings.S3_ACCESS_KEY,
             "aws_secret_access_key": settings.S3_SECRET_KEY,
-            "use_ssl": False if "localhost" in settings.S3_ENDPOINT or "minio" in settings.S3_ENDPOINT else True,
+            "use_ssl": settings.S3_ENDPOINT.startswith("https://"),
         }
         self.bucket_name = settings.S3_BUCKET_NAME
 
@@ -81,5 +81,34 @@ class S3Service:
                 ExtraArgs={"ContentType": file.content_type or "application/octet-stream"},
             )
         return key
+
+    async def ensure_bucket(self, cors_origins: list[str]) -> None:
+        """Crea el bucket si no existe y aplica CORS para los orígenes del frontend.
+
+        El visor de PDF descarga el archivo con fetch() desde el navegador usando la
+        URL prefirmada, así que el almacenamiento debe responder con CORS.
+        """
+        async with self.session.client(**self.config) as s3:
+            try:
+                await s3.head_bucket(Bucket=self.bucket_name)
+            except Exception:
+                await s3.create_bucket(Bucket=self.bucket_name)
+                logger.info("Bucket %s creado", self.bucket_name)
+            await s3.put_bucket_cors(
+                Bucket=self.bucket_name,
+                CORSConfiguration={
+                    "CORSRules": [
+                        {
+                            "AllowedOrigins": cors_origins,
+                            "AllowedMethods": ["GET", "HEAD"],
+                            "AllowedHeaders": ["*"],
+                            "ExposeHeaders": ["Content-Length", "Content-Range", "Accept-Ranges", "ETag"],
+                            "MaxAgeSeconds": 3600,
+                        }
+                    ]
+                },
+            )
+            logger.info("CORS del bucket %s: %s", self.bucket_name, cors_origins)
+
 
 s3_service = S3Service()

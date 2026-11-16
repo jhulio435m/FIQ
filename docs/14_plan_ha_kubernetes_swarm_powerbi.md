@@ -45,7 +45,7 @@ flowchart TD
     Backend --> PostgresHA[(PostgreSQL HA Patroni)]
     Backend --> MongoRS[(MongoDB Replica Set)]
     Backend --> Redis[(Redis)]
-    Backend --> ObjectStorage[(S3 / MinIO)]
+    Backend --> ObjectStorage[(S3 / RustFS)]
 
     Backend --> Dashboards[API publica Power BI / Looker Studio]
     PostgresHA --> Backups[Backups + Restore Tests]
@@ -58,7 +58,7 @@ flowchart TD
 
 ### Fase 0: Base ya disponible
 
-- `compose.yaml` local con PostgreSQL, MongoDB, Redis, MinIO, backend y frontend.
+- `compose.yaml` local con PostgreSQL, MongoDB, Redis, RustFS, backend y frontend.
 - PostgreSQL HA desplegado y validado con Patroni/etcd/HAProxy en `ha-database/` sobre WireGuard. Ultimo check operativo: `oti` (`10.77.0.2`) como primario, `ubuntu` (`10.77.0.1`) y `laptop` (`10.77.0.3`) como replicas en streaming.
 - MongoDB documental para `activity_events` y `external_catalog_cache`.
 - API para Power BI y Looker Studio/Data Studio con `/reports/public/*` protegida por `DASHBOARD_API_KEY`.

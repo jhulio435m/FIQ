@@ -1,3 +1,4 @@
+from app.core.config import settings
 import asyncio
 import uuid
 import random
@@ -65,6 +66,11 @@ AUTORES = [
 ]
 
 async def seed_mock():
+    if settings.is_production_like:
+        raise SystemExit(
+            "Este seed TRUNCA la base de datos y vacía el bucket: prohibido en "
+            f"ENVIRONMENT={settings.ENVIRONMENT}. Usa `python -m app.core.bootstrap`."
+        )
     async with engine.begin() as conn:
         await truncate_all(conn)
 

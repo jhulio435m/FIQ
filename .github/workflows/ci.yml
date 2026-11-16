@@ -1,9 +1,8 @@
 name: CI/CD Pipeline
 
 on:
+  # En push a main lo invoca "Build & Deploy" (workflow_call) antes de construir imágenes.
   workflow_call:
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
 
@@ -16,8 +15,8 @@ jobs:
 
       - name: Start Docker Compose Services
         run: |
-          # Start Postgres, Redis, and MinIO in the background
-          docker compose up -d postgres redis minio
+          # Start Postgres, Redis, and RustFS (S3) in the background
+          docker compose up -d postgres redis rustfs
           
           # Wait for Postgres to be healthy
           echo "Waiting for Postgres..."
@@ -26,10 +25,10 @@ jobs:
             sleep 2
           done
 
-          # Wait for Minio to be healthy
-          echo "Waiting for Minio..."
+          # Wait for RustFS to be healthy
+          echo "Waiting for RustFS..."
           for i in {1..30}; do
-            curl -s http://localhost:9000/minio/health/ready && break
+            curl -fsS http://localhost:9000/health && break
             sleep 2
           done
 
@@ -49,8 +48,8 @@ jobs:
           DATABASE_URL: postgresql://fiq:fiq123@localhost:5433/fiq_db
           REDIS_URL: redis://localhost:6379/0
           S3_ENDPOINT: http://localhost:9000
-          S3_ACCESS_KEY: minioadmin
-          S3_SECRET_KEY: minioadmin
+          S3_ACCESS_KEY: rustfsadmin
+          S3_SECRET_KEY: rustfsadmin
           S3_BUCKET_NAME: fiq-recursos
           SECRET_KEY: dev-secret-key-change-in-production
         run: |
@@ -102,8 +101,8 @@ jobs:
           DATABASE_URL: postgresql://fiq:fiq123@localhost:5433/fiq_db
           REDIS_URL: redis://localhost:6379/0
           S3_ENDPOINT: http://localhost:9000
-          S3_ACCESS_KEY: minioadmin
-          S3_SECRET_KEY: minioadmin
+          S3_ACCESS_KEY: rustfsadmin
+          S3_SECRET_KEY: rustfsadmin
           S3_BUCKET_NAME: fiq-recursos
           SECRET_KEY: dev-secret-key-change-in-production
         run: |
@@ -124,8 +123,8 @@ jobs:
           DATABASE_URL: postgresql://fiq:fiq123@localhost:5433/fiq_db
           REDIS_URL: redis://localhost:6379/0
           S3_ENDPOINT: http://localhost:9000
-          S3_ACCESS_KEY: minioadmin
-          S3_SECRET_KEY: minioadmin
+          S3_ACCESS_KEY: rustfsadmin
+          S3_SECRET_KEY: rustfsadmin
           S3_BUCKET_NAME: fiq-recursos
           SECRET_KEY: dev-secret-key-change-in-production
         run: |
