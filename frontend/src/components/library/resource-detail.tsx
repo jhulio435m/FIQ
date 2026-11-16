@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -34,59 +34,48 @@ export function ResourceDetail({ resource, open, onOpenChange }: Props) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { isAuthenticated, user } = useAuthStore()
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
-  const [loadingPdf, setLoadingPdf] = useState(false)
-  const [localResource, setLocalResource] = useState<Recurso | null>(null)
-
-  // Edit Mode States
-  const [isEditing, setIsEditing] = useState(false)
+  // Versión actualizada del recurso (tras registrar la vista o editarlo). Solo se
+  // usa si corresponde al recurso abierto; así no hay que sincronizar estado en efectos.
+  const [updatedResource, setUpdatedResource] = useState<Recurso | null>(null)
+  // Guardar el id en edición (y no un boolean) cierra la edición al cambiar de recurso.
+  const [editingId, setEditingId] = useState<Recurso["id"] | null>(null)
 
   const isAdmin = checkIsAdmin(user)
+  const resourceId = resource?.id
+  const localResource = updatedResource && updatedResource.id === resourceId ? updatedResource : resource
+  const isEditing = resourceId !== undefined && editingId === resourceId
 
   useEffect(() => {
-    if (resource) {
-      setLocalResource(resource)
-      setIsEditing(false) // reset edit state when resource changes
-    }
-  }, [resource])
+    if (resourceId === undefined || !open) return
+    trackView(resourceId)
+      .then((updated) => {
+        setUpdatedResource(updated)
+        queryClient.invalidateQueries({ queryKey: ["resources"] })
+      })
+      .catch((err) => {
+        console.error("Error tracking view:", err)
+      })
+  }, [resourceId, open, queryClient])
+
+  const pdfQuery = useQuery({
+    queryKey: ["resource-url", resourceId],
+    queryFn: () => getResourceUrl(resourceId as Recurso["id"]),
+    enabled: open && resourceId !== undefined,
+    // Las URL prefirmadas duran 1 h: se reutilizan al reabrir el mismo recurso.
+    staleTime: 50 * 60 * 1000,
+    retry: 1,
+  })
+  const pdfUrl = open ? pdfQuery.data ?? null : null
+  const loadingPdf = open && pdfQuery.isFetching && !pdfQuery.data
 
   useEffect(() => {
-    if (resource && open) {
-      // Track view is now public
-      trackView(resource.id)
-        .then((updated) => {
-          setLocalResource(updated)
-          queryClient.invalidateQueries({ queryKey: ["resources"] })
-        })
-        .catch((err) => {
-          console.error("Error tracking view:", err)
-        })
-    }
-  }, [resource?.id, open, queryClient])
-
-  useEffect(() => {
-    if (resource && open) {
-      const fetchUrl = async () => {
-        setLoadingPdf(true)
-        try {
-          const url = await getResourceUrl(resource.id)
-          setPdfUrl(url)
-        } catch {
-          toast.error("Error al cargar la visualización del PDF")
-        } finally {
-          setLoadingPdf(false)
-        }
-      }
-      fetchUrl()
-    } else {
-      setPdfUrl(null)
-    }
-  }, [resource?.id, open])
+    if (pdfQuery.isError) toast.error("Error al cargar la visualización del PDF")
+  }, [pdfQuery.isError])
 
   if (!resource || !localResource) return null
 
-  const handleStartEdit = () => setIsEditing(true)
-  const handleCancelEdit = () => setIsEditing(false)
+  const handleStartEdit = () => setEditingId(resource.id)
+  const handleCancelEdit = () => setEditingId(null)
 
   const handleDownload = async () => {
     if (!isAuthenticated()) {
@@ -101,7 +90,7 @@ export function ResourceDetail({ resource, open, onOpenChange }: Props) {
 
     try {
       const { download_url, resource: updated } = await trackDownload(resource.id)
-      setLocalResource(updated)
+      setUpdatedResource(updated)
       
       const link = document.createElement("a")
       link.href = download_url
@@ -145,7 +134,7 @@ export function ResourceDetail({ resource, open, onOpenChange }: Props) {
             <ResourceEditForm 
               resource={localResource} 
               onCancel={handleCancelEdit} 
-              onSave={(updated) => { setLocalResource(updated); setIsEditing(false) }}
+              onSave={(updated) => { setUpdatedResource(updated); setEditingId(null) }}
             />
           ) : (
             <div className="space-y-5">

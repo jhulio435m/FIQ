@@ -20,8 +20,7 @@ from app.reports.queries import (
     _course_rows,
     _user_rows,
     _activity_rows,
-    _document_metrics_payload as _queries_document_metrics_payload,
-    _date_yyyymmdd
+    _document_metrics_payload as _queries_document_metrics_payload
 )
 
 router = APIRouter()

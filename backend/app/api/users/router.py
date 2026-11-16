@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from typing import List
@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.dependencies import require_role
 from app.models.user import User
-from app.schemas.user import UserRead, UserUpdate
+from app.schemas.user import UserRead
 
 router = APIRouter()
 

@@ -2,7 +2,6 @@ import asyncio
 import uuid
 import os
 import logging
-from sqlmodel import SQLModel
 
 from app.core.database import engine, async_session_maker
 from app.core.config import settings

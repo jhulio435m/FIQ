@@ -1,5 +1,4 @@
 import uuid
-from typing import Optional
 
 from fastapi_users_db_sqlmodel import SQLModelBaseUserDB
 from sqlmodel import Field, SQLModel

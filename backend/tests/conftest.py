@@ -19,7 +19,7 @@ from app.core.database import get_db
 from app.core.kvstore import MemoryStore, set_store
 from app.main import app
 from app.models.activity import TipoActividad
-from app.models.resource import Curso, EstadoRecurso, Recurso, TipoRecurso
+from app.models.resource import Curso, EstadoRecurso, TipoRecurso
 from app.models.user import Rol, User
 
 

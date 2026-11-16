@@ -48,7 +48,7 @@ interface Props {
 }
 
 export function PdfViewer({ url }: Props) {
-  const [libLoaded, setLibLoaded] = useState(false)
+  const [libLoaded, setLibLoaded] = useState(() => Boolean(window.pdfjsLib))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [pdfDoc, setPdfDoc] = useState<PdfJsDocument | null>(null)
@@ -58,10 +58,7 @@ export function PdfViewer({ url }: Props) {
 
   // 1. Load PDF.js library from CDN
   useEffect(() => {
-    if (window.pdfjsLib) {
-      setLibLoaded(true)
-      return
-    }
+    if (window.pdfjsLib) return
 
     const script = document.createElement("script")
     script.src = PDFJS_SCRIPT_URL

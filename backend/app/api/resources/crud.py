@@ -3,7 +3,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from fastapi import HTTPException
 
 from app.models.resource import Curso, Recurso, TipoRecurso, EstadoRecurso
-from app.models.activity import TipoActividad
 
 from app.core.cache import get_activity_type_id
 

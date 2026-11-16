@@ -7,7 +7,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 import uuid
 import httpx
 import urllib.parse
-from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -15,7 +14,6 @@ from app.core.users import UserManager, get_jwt_strategy, get_user_manager
 from app.api.auth.schemas import LoginRequest, LoginResponse, ForgotPasswordRequest, MicrosoftLoginRequest
 from app.models.user import User
 from app.core.security import hash_password
-from app.models.activity import TipoActividad
 from app.logs.crud import log_activity
 from app.core.cache import get_activity_type_id
 from app.core.rate_limit import enforce_rate_limit, reset_rate_limit

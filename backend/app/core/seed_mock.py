@@ -2,7 +2,7 @@ from app.core.config import settings
 import asyncio
 import uuid
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from app.core.database import engine, async_session_maker
 from app.models.user import User

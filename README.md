@@ -177,3 +177,5 @@ Los resultados externos se normalizan a metadatos comunes: titulo, autores, edit
 - [Pruebas](./docs/11_pruebas.md)
 - [Laboratorios](./docs/12_laboratorios.md)
 - [Integraciones externas](./docs/13_integraciones_externas.md)
+- [Informe técnico HA](./docs/17_informe_tecnico_ha.md)
+- [Despliegue Kubernetes](./infra/k8s/README.md)
