@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from fastapi import HTTPException, Request
+from fastapi import Request
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.resource import Recurso, RecursoEstadoHistorial

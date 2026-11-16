@@ -4,7 +4,7 @@ from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.user import Rol, User
-from app.models.resource import TipoRecurso, EstadoRecurso, Curso
+from app.models.resource import TipoRecurso, EstadoRecurso
 from app.models.activity import TipoActividad
 from app.models.lab import NivelDificultad, ModuloLaboratorio
 from app.core.security import hash_password

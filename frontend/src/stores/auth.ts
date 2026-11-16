@@ -58,8 +58,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
     logout: async () => {
       try {
         await apiLogout()
-      } catch (_) {
-        // ignore
+      } catch {
+        // Si el servidor no responde igual se limpia la sesión local.
       } finally {
         const storage = getStorage()
         storage.removeItem("access_token")

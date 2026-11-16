@@ -5,17 +5,15 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from typing import List, Optional
 from datetime import datetime, timezone
-from pathlib import Path
 from urllib.parse import quote
 
 from app.core.database import get_db
 from app.core.users import current_active_user, get_optional_user
 from app.core.dependencies import require_role
-from app.core.config import settings
+from app.core.config import settings  # noqa: F401 - los tests hacen monkeypatch de router.settings
 from app.core.s3 import s3_service
 from app.models.user import User
-from app.models.resource import Curso, Recurso, RecursoEstadoHistorial, TipoRecurso, EstadoRecurso
-from app.models.activity import TipoActividad
+from app.models.resource import Curso, Recurso, TipoRecurso, EstadoRecurso
 from app.schemas.resource import (
     PresignedPost,
     RecursoCreate,
