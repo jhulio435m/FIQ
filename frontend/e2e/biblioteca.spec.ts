@@ -5,7 +5,7 @@ test.describe('Flujo de Biblioteca y Descargas', () => {
   test('debe permitir navegar la biblioteca y ver detalles sin estar logueado', async ({ page }) => {
     await page.goto('/biblioteca');
     await expect(page.getByText('Biblioteca Virtual')).toBeVisible();
-    await expect(page.getByText(/recurso.*encontrado/)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/Mostrando \d+–\d+ de \d+ recurso/)).toBeVisible({ timeout: 15000 });
     
     // Click en la primera tarjeta
     await page.locator('.group.p-4').first().click();
@@ -34,7 +34,7 @@ test.describe('Flujo de Biblioteca y Descargas', () => {
     await expect(page.locator('header')).toContainText('Administrador PRO');
     
     await page.goto('/biblioteca');
-    await expect(page.getByText(/recurso.*encontrado/)).toBeVisible();
+    await expect(page.getByText(/Mostrando \d+–\d+ de \d+ recurso/)).toBeVisible();
     
     await page.locator('.group.p-4').first().click();
     const downloadBtn = page.getByText('Descargar PDF');

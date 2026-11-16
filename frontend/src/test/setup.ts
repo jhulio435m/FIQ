@@ -7,6 +7,9 @@ import { useAuthStore } from "@/stores/auth"
 
 api.defaults.adapter = "fetch"
 
+// jsdom no implementa scroll; la paginación lo usa para volver arriba.
+window.scrollTo = vi.fn() as typeof window.scrollTo
+
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 
 afterEach(() => {

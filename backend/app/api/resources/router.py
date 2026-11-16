@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import RedirectResponse
-from sqlalchemy import or_
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from typing import List, Optional
@@ -15,6 +14,9 @@ from app.core.s3 import s3_service
 from app.models.user import User
 from app.models.resource import Curso, Recurso, TipoRecurso, EstadoRecurso
 from app.schemas.resource import (
+    CatalogFacets,
+    FacetCount,
+    YearFacet,
     PresignedPost,
     RecursoCreate,
     RecursoRead,
@@ -37,6 +39,14 @@ from app.api.resources.upload import (
     _log_upload_rejected,
     PDF_MIME_TYPES
 )
+from app.api.resources.search import (
+    CatalogFilters,
+    SortOption,
+    catalog_query,
+    count_query,
+    facet_query,
+    search_terms,
+)
 from app.api.resources.service import (
     process_approve_resource,
     process_observe_resource,
@@ -58,28 +68,87 @@ async def list_courses(db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 
+async def _catalog_filters(
+    db: AsyncSession,
+    search: Optional[str],
+    tipo_recurso_id: Optional[int],
+    curso_id: Optional[int],
+    anio_desde: Optional[int],
+    anio_hasta: Optional[int],
+) -> CatalogFilters:
+    return CatalogFilters(
+        estado_id=await _state_id(db, "Aprobado"),
+        terms=search_terms(search),
+        tipo_recurso_id=tipo_recurso_id,
+        curso_id=curso_id,
+        anio_desde=anio_desde,
+        anio_hasta=anio_hasta,
+    )
+
+
 @router.get("", response_model=List[RecursoRead])
 @router.get("/", response_model=List[RecursoRead])
 async def search_resources(
-    search: Optional[str] = None,
+    response: Response,
+    search: Optional[str] = Query(None, max_length=200),
     tipo_recurso_id: Optional[int] = None,
     curso_id: Optional[int] = None,
-    skip: int = 0,
-    limit: int = 20,
+    anio_desde: Optional[int] = Query(None, ge=1800, le=2200),
+    anio_hasta: Optional[int] = Query(None, ge=1800, le=2200),
+    sort: SortOption = "recent",
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    approved_id = await _state_id(db, "Aprobado")
-    query = select(Recurso).where(Recurso.estado_id == approved_id)
-    if search:
-        pattern = f"%{search.strip()}%"
-        query = query.where(or_(Recurso.titulo.ilike(pattern), Recurso.resumen.ilike(pattern)))
-    if tipo_recurso_id:
-        query = query.where(Recurso.tipo_recurso_id == tipo_recurso_id)
-    if curso_id:
-        query = query.where(Recurso.curso_id == curso_id)
-    
-    result = await db.execute(query.order_by(Recurso.created_at.desc()).offset(skip).limit(limit))
+    """Catálogo público paginado. El total de resultados va en `X-Total-Count`."""
+    filters = await _catalog_filters(db, search, tipo_recurso_id, curso_id, anio_desde, anio_hasta)
+    total = (await db.execute(count_query(filters))).scalar_one()
+    result = await db.execute(catalog_query(filters, sort).offset(skip).limit(limit))
+    response.headers["X-Total-Count"] = str(total)
     return await _resource_list_payload(db, list(result.scalars().all()))
+
+
+@router.get("/facets", response_model=CatalogFacets)
+async def catalog_facets(
+    search: Optional[str] = Query(None, max_length=200),
+    tipo_recurso_id: Optional[int] = None,
+    curso_id: Optional[int] = None,
+    anio_desde: Optional[int] = Query(None, ge=1800, le=2200),
+    anio_hasta: Optional[int] = Query(None, ge=1800, le=2200),
+    db: AsyncSession = Depends(get_db),
+):
+    """Conteos por tipo, curso y año para la búsqueda actual. Cada faceta ignora
+    su propio filtro para mostrar cuántos resultados daría cambiarlo."""
+    filters = await _catalog_filters(db, search, tipo_recurso_id, curso_id, anio_desde, anio_hasta)
+    total = (await db.execute(count_query(filters))).scalar_one()
+
+    tipo_counts = dict((await db.execute(facet_query(filters, Recurso.tipo_recurso_id, "tipo"))).all())
+    tipos = (await db.execute(select(TipoRecurso).order_by(TipoRecurso.nombre))).scalars().all()
+
+    curso_counts = {
+        curso_id_: count
+        for curso_id_, count in (await db.execute(facet_query(filters, Recurso.curso_id, "curso"))).all()
+        if curso_id_ is not None
+    }
+    curso_ids = set(curso_counts) | ({curso_id} if curso_id else set())
+    cursos = []
+    if curso_ids:
+        cursos = (
+            await db.execute(select(Curso).where(Curso.id.in_(curso_ids)).order_by(Curso.nombre))
+        ).scalars().all()
+
+    anio_rows = (await db.execute(facet_query(filters, Recurso.anio, "anio"))).all()
+
+    return CatalogFacets(
+        total=total,
+        tipos=[FacetCount(id=t.id, nombre=t.nombre, count=tipo_counts.get(t.id, 0)) for t in tipos],
+        cursos=[FacetCount(id=c.id, nombre=c.nombre, count=curso_counts.get(c.id, 0)) for c in cursos],
+        anios=sorted(
+            (YearFacet(anio=anio, count=count) for anio, count in anio_rows if anio is not None),
+            key=lambda y: y.anio,
+            reverse=True,
+        ),
+    )
 
 
 @router.post("", response_model=RecursoRead, status_code=201)
