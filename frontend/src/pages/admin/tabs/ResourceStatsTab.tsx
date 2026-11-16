@@ -1,8 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { usePendingResources, useReportsData } from "@/hooks/use-reports-data"
+import { useReportsData } from "@/hooks/use-reports-data"
+import { useModerationQueue } from "@/hooks/use-moderation"
 
 export function ResourceStatsTab() {
-  const { query } = usePendingResources()
+  const query = useModerationQueue()
   const { mostViewedQuery, labsUsageQuery } = useReportsData()
 
   const pending = query.data || []

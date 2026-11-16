@@ -37,15 +37,23 @@ Contrato REST real generado por FastAPI y verificado con `npm run openapi:check`
 | `POST /resources` | Docente/Admin | Upload multipart seguro de PDF. |
 | `POST /resources/init-upload` | Docente/Admin | Inicializa subida directa S3 con metadatos. |
 | `POST /resources/import-external` | Docente/Admin | Importa metadatos desde fuentes externas y crea recurso pendiente. |
-| `GET /resources/pending` | Admin | Recursos pendientes de moderacion. |
-| `PATCH /resources/{resource_id}` | Admin | Actualiza metadatos. |
+| `GET /resources/pending` | Admin | Cola de moderacion (FIFO) con autor, ultimo comentario y numero de reenvios. |
+| `POST /resources/bulk-approve` | Admin | Aprueba en lote (max 50); omite los que no estan pendientes. |
+| `GET /resources/mine` | Docente/Admin | Recursos propios en todos los estados, con conteos por estado; filtro `estado`. Observados primero. |
+| `GET /resources/{resource_id}/history` | Autor/Admin | Historial de cambios de estado con comentario, autor del cambio y fecha. |
+| `POST /resources/{resource_id}/resubmit` | Autor | Reenvia a revision un recurso observado (`Observado` → `Pendiente`), nota opcional. |
+| `PUT /resources/{resource_id}/file` | Autor | Reemplaza el PDF de un recurso pendiente u observado. |
+| `PATCH /resources/{resource_id}` | Admin/Autor | Actualiza metadatos. El autor solo en recursos propios pendientes u observados. |
 | `DELETE /resources/{resource_id}` | Admin | Archiva recurso logicamente. |
 | `PATCH /resources/{resource_id}/approve` | Admin | Aprueba recurso. |
-| `PATCH /resources/{resource_id}/observe` | Admin | Observa recurso con comentario. |
-| `POST /resources/{resource_id}/view` | Publica/JWT opcional | Incrementa visualizaciones. |
+| `PATCH /resources/{resource_id}/observe` | Admin | Observa recurso; comentario obligatorio (10-1000). |
+| `PATCH /resources/{resource_id}/reject` | Admin | Rechaza recurso pendiente u observado; comentario obligatorio. |
+| `POST /resources/{resource_id}/view` | Publica/JWT opcional | Incrementa visualizaciones (solo recursos aprobados). |
 | `POST /resources/{resource_id}/download` | JWT | Incrementa descargas y devuelve URL interna de archivo. |
-| `GET /resources/{resource_id}/url` | Publica | Devuelve URL interna del archivo. |
-| `GET /resources/{resource_id}/file` | Publica | Stream del PDF desde object storage. |
+| `GET /resources/{resource_id}/url` | Publica* | Devuelve URL interna del archivo. |
+| `GET /resources/{resource_id}/file` | Publica* | Stream del PDF desde object storage. |
+
+\* Los recursos no aprobados (pendientes, observados, rechazados, archivados) solo son visibles para su autor y para Admin; para cualquier otro usuario `/url`, `/file`, `/view` y `/download` responden `404`, sin revelar que el recurso existe.
 | `GET /external/search/books` | Publica | Busca libros en Open Library e Internet Archive. |
 | `GET /external/search/articles` | Publica | Busca articulos en Crossref, OpenAlex y Unpaywall si hay email configurado. |
 | `GET /labs` | Publica | Modulos de laboratorio, filtro `nivel_id`. |
@@ -238,11 +246,24 @@ Errores esperados: `401`, `403`, `409`, `422`.
 
 ### Moderacion de Recursos
 
+Transiciones permitidas (cualquier otra responde `409`):
+
+| Desde | Accion | Hacia | Quien |
+| :--- | :--- | :--- | :--- |
+| Pendiente | `approve` / `bulk-approve` | Aprobado | Admin |
+| Pendiente | `observe` (comentario obligatorio) | Observado | Admin |
+| Pendiente, Observado | `reject` (comentario obligatorio) | Rechazado | Admin |
+| Observado | `resubmit` (nota opcional) | Pendiente | Autor |
+
 - `PATCH /resources/{resource_id}/approve`: body opcional `{ "comentario": "texto" }`.
-- `PATCH /resources/{resource_id}/observe`: body requerido `{ "comentario": "texto" }`.
+- `PATCH /resources/{resource_id}/observe` y `/reject`: body requerido `{ "comentario": "texto de 10 a 1000 caracteres" }`.
+- `POST /resources/bulk-approve`: `{ "ids": [1, 2], "comentario": "opcional" }` → `{ "procesados": [1], "omitidos": [2] }`.
+- `POST /resources/{resource_id}/resubmit`: body opcional `{ "nota": "que se corrigio" }`.
 - `DELETE /resources/{resource_id}`: body opcional `{ "comentario": "texto" }`.
 
-Codigos comunes: `200`, `401`, `403`, `404`, `422`.
+Cada transicion queda en `recurso_estado_historial` y en auditoria (`resource_approve`, `resource_observe`, `resource_reject`, `resource_resubmit`).
+
+Codigos comunes: `200`, `401`, `403`, `404`, `409`, `422`.
 
 ## Auditoria
 

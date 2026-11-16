@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 import uuid
-from sqlmodel import SQLModel
+from sqlmodel import Field, SQLModel
 
 
 class RecursoRead(SQLModel):
@@ -103,3 +103,46 @@ class CatalogFacets(SQLModel):
     tipos: list[FacetCount]
     cursos: list[FacetCount]
     anios: list[YearFacet]
+
+
+# --- Moderación y "Mis recursos" ---
+
+class ModerationComment(SQLModel):
+    comentario: str = Field(min_length=10, max_length=1000)
+
+
+class BulkApproveRequest(SQLModel):
+    ids: list[int] = Field(min_length=1, max_length=50)
+    comentario: Optional[str] = Field(default=None, max_length=1000)
+
+
+class BulkModerationResult(SQLModel):
+    procesados: list[int]
+    omitidos: list[int]
+
+
+class ResubmitRequest(SQLModel):
+    nota: Optional[str] = Field(default=None, max_length=1000)
+
+
+class HistoryEntry(SQLModel):
+    id: int
+    estado_anterior: Optional[str] = None
+    estado_nuevo: str
+    comentario: Optional[str] = None
+    cambiado_por_nombre: Optional[str] = None
+    fecha_hora: datetime
+
+
+class ModerationItem(RecursoRead):
+    estado_nombre: str
+    subido_por_nombre: Optional[str] = None
+    subido_por_email: Optional[str] = None
+    ultimo_comentario: Optional[str] = None
+    ultimo_cambio: Optional[datetime] = None
+    reenvios: int = 0
+
+
+class MyResourcesResponse(SQLModel):
+    items: list[ModerationItem]
+    conteos: dict[str, int]
