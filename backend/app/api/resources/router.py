@@ -47,13 +47,21 @@ from app.api.resources.search import (
     facet_query,
     search_terms,
 )
-from app.api.resources.service import (
-    process_approve_resource,
-    process_observe_resource,
-    process_archive_resource
-)
+from app.api.resources.moderation import OWNER_EDITABLE, can_access_unpublished
+from app.api.resources.service import process_archive_resource
 
 router = APIRouter(redirect_slashes=False)
+
+
+async def _readable_resource(db: AsyncSession, resource_id: int, user: Optional[User]) -> Recurso:
+    """Recurso visible para `user`: los aprobados son públicos; el resto solo
+    para su autor o un Admin. Responde 404 (no 403) para no revelar que existe."""
+    recurso = await db.get(Recurso, resource_id)
+    if not recurso:
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
+    if recurso.estado_id != await _state_id(db, "Aprobado") and not can_access_unpublished(recurso, user):
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
+    return recurso
 
 
 @router.get("/types", response_model=List[TipoRecursoRead])
@@ -348,10 +356,11 @@ async def track_view(
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
-    recurso = await db.get(Recurso, resource_id)
-    if not recurso:
-        raise HTTPException(status_code=404, detail="Recurso no encontrado")
-    
+    recurso = await _readable_resource(db, resource_id, user)
+    # Solo cuentan las vistas del catálogo publicado (no las revisiones del autor o del admin).
+    if recurso.estado_id != await _state_id(db, "Aprobado"):
+        return await _resource_payload(db, recurso)
+
     recurso.visualizaciones += 1
     await db.commit()
     await db.refresh(recurso)
@@ -374,10 +383,9 @@ async def track_view(
 async def get_resource_url(
     resource_id: int,
     db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_optional_user),
 ):
-    recurso = await db.get(Recurso, resource_id)
-    if not recurso:
-        raise HTTPException(status_code=404, detail="Recurso no encontrado")
+    recurso = await _readable_resource(db, resource_id, user)
     if recurso.url_archivo.startswith(("http://", "https://")):
         return {"url": recurso.url_archivo}
     return {"url": f"/api/resources/{resource_id}/file"}
@@ -387,10 +395,9 @@ async def get_resource_url(
 async def get_resource_file(
     resource_id: int,
     db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_optional_user),
 ):
-    recurso = await db.get(Recurso, resource_id)
-    if not recurso:
-        raise HTTPException(status_code=404, detail="Recurso no encontrado")
+    recurso = await _readable_resource(db, resource_id, user)
     if recurso.url_archivo.startswith(("http://", "https://")):
         return RedirectResponse(recurso.url_archivo, status_code=307)
 
@@ -420,10 +427,8 @@ async def track_download(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(current_active_user),
 ):
-    recurso = await db.get(Recurso, resource_id)
-    if not recurso:
-        raise HTTPException(status_code=404, detail="Recurso no encontrado")
-    
+    recurso = await _readable_resource(db, resource_id, user)
+
     recurso.descargas += 1
     await db.commit()
 
@@ -447,59 +452,23 @@ async def track_download(
     return {"download_url": download_url, "resource": await _resource_payload(db, recurso)}
 
 
-@router.get("/pending", response_model=List[RecursoRead])
-async def pending_resources(
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_role("Admin")),
-):
-    pending_id = await _state_id(db, "Pendiente")
-    result = await db.execute(
-        select(Recurso)
-        .where(Recurso.estado_id == pending_id)
-        .order_by(Recurso.created_at.desc())
-    )
-    return await _resource_list_payload(db, list(result.scalars().all()))
-
-
-@router.patch("/{resource_id}/approve", response_model=RecursoRead)
-async def approve_resource(
-    request: Request,
-    resource_id: int,
-    data: ResourceModeration | None = None,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role("Admin")),
-):
-    recurso = await db.get(Recurso, resource_id)
-    if not recurso:
-        raise HTTPException(status_code=404, detail="Recurso no encontrado")
-    return await process_approve_resource(db, recurso, data.comentario if data else None, user, request)
-
-
-@router.patch("/{resource_id}/observe", response_model=RecursoRead)
-async def observe_resource(
-    resource_id: int,
-    data: ResourceModeration,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role("Admin")),
-):
-    recurso = await db.get(Recurso, resource_id)
-    if not recurso:
-        raise HTTPException(status_code=404, detail="Recurso no encontrado")
-    return await process_observe_resource(db, recurso, data.comentario, user)
-
-
 @router.patch("/{resource_id}", response_model=RecursoRead)
 async def update_resource(
     request: Request,
     resource_id: int,
     data: RecursoUpdate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role("Admin")),
+    user: User = Depends(require_role("Docente", "Admin")),
 ):
+    """Admin edita cualquier recurso; el autor, solo los suyos pendientes u observados."""
     recurso = await db.get(Recurso, resource_id)
-    if not recurso:
+    if not recurso or (user.rol != "Admin" and recurso.subido_por != user.id):
         raise HTTPException(status_code=404, detail="Recurso no encontrado")
-    
+    if user.rol != "Admin":
+        estado = await db.get(EstadoRecurso, recurso.estado_id)
+        if not estado or estado.nombre not in OWNER_EDITABLE:
+            raise HTTPException(status_code=409, detail="Solo puedes editar recursos pendientes u observados.")
+
     if data.titulo is not None:
         recurso.titulo = data.titulo
     if data.resumen is not None:
@@ -523,7 +492,7 @@ async def update_resource(
     await db.refresh(recurso)
     
     # Log activity
-    tipo = await _activity_type(db, "upload")  # Using 'upload' as a general activity logger
+    tipo = await _activity_type(db, "resource_edit")
     if tipo:
         await log_activity(
             db,

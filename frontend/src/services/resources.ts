@@ -100,21 +100,6 @@ export async function uploadResource(formData: FormData) {
   return data
 }
 
-export async function getPendingResources() {
-  const { data } = await api.get<Recurso[]>("/resources/pending")
-  return data
-}
-
-export async function approveResource(id: number, comentario?: string) {
-  const { data } = await api.patch<Recurso>(`/resources/${id}/approve`, { comentario })
-  return data
-}
-
-export async function observeResource(id: number, comentario: string) {
-  const { data } = await api.patch<Recurso>(`/resources/${id}/observe`, { comentario })
-  return data
-}
-
 export async function trackView(id: number) {
   const { data } = await api.post<Recurso>(`/resources/${id}/view`)
   return data

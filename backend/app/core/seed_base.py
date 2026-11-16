@@ -86,6 +86,9 @@ async def seed_actividades(db: AsyncSession) -> list[TipoActividad]:
         TipoActividad(id=8, nombre="resource_archive"),
         TipoActividad(id=9, nombre="upload_rejected"),
         TipoActividad(id=10, nombre="resource_edit"),
+        TipoActividad(id=11, nombre="resource_observe"),
+        TipoActividad(id=12, nombre="resource_reject"),
+        TipoActividad(id=13, nombre="resource_resubmit"),
     ]
     db.add_all(actividades)
     return actividades

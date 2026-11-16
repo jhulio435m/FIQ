@@ -11,6 +11,7 @@ from app.core.users import fastapi_users
 from app.schemas.user import UserRead, UserCreate, UserUpdate
 from app.api.auth.router import router as auth_router
 from app.api.resources.router import router as resources_router
+from app.api.resources.moderation import router as moderation_router
 from app.api.users.router import router as admin_users_router
 from app.api.labs.router import router as labs_router
 from app.api.external_catalog.router import router as external_catalog_router
@@ -93,6 +94,7 @@ app.include_router(
 )
 
 # --- Resource Domain ---
+app.include_router(moderation_router, prefix="/resources", tags=["Moderación"])
 app.include_router(resources_router, prefix="/resources", tags=["Recursos"])
 app.include_router(external_catalog_router, prefix="/external", tags=["Catálogo externo"])
 app.include_router(labs_router, prefix="/labs", tags=["Laboratorios"])

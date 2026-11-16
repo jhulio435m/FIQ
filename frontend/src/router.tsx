@@ -6,6 +6,7 @@ import Biblioteca from "@/pages/biblioteca"
 import Laboratorios from "@/pages/laboratorios"
 import Admin from "@/pages/admin"
 import Perfil from "@/pages/perfil"
+import MisRecursos from "@/pages/mis-recursos"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 
 export const router = createBrowserRouter([
@@ -20,6 +21,10 @@ export const router = createBrowserRouter([
       {
         element: <ProtectedRoute />,
         children: [{ path: "perfil", element: <Perfil /> }],
+      },
+      {
+        element: <ProtectedRoute allowedRoles={["Docente", "Admin"]} />,
+        children: [{ path: "mis-recursos", element: <MisRecursos /> }],
       },
       {
         element: <ProtectedRoute allowedRoles={["Admin"]} />,

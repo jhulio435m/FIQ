@@ -108,6 +108,8 @@ export function UploadDialog() {
         form.reset()
         setFile(null)
         queryClient.invalidateQueries({ queryKey: ["resources"] })
+        queryClient.invalidateQueries({ queryKey: ["my-resources"] })
+        queryClient.invalidateQueries({ queryKey: ["pending-resources"] })
       }, 2000)
 
     } catch (error: unknown) {

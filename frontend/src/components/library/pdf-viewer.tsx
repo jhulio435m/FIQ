@@ -1,3 +1,4 @@
+import { fetchResourceFile } from "@/services/moderation"
 import { useEffect, useRef, useState } from "react"
 import { Loader2, ZoomIn, ZoomOut, AlertCircle, Maximize2, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -44,10 +45,13 @@ const PDFJS_SCRIPT_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_
 const PDFJS_WORKER_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`
 
 interface Props {
-  url: string
+  /** URL pública del PDF (recursos publicados o externos). */
+  url?: string
+  /** Alternativa a `url`: descarga el PDF con la sesión del usuario (recursos no publicados). */
+  resourceId?: number
 }
 
-export function PdfViewer({ url }: Props) {
+export function PdfViewer({ url, resourceId }: Props) {
   const [libLoaded, setLibLoaded] = useState(() => Boolean(window.pdfjsLib))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -81,17 +85,21 @@ export function PdfViewer({ url }: Props) {
 
   // 2. Fetch and load the PDF document
   useEffect(() => {
-    if (!libLoaded || !url) return
+    if (!libLoaded || (!url && resourceId === undefined)) return
 
     let isMounted = true
     const fetchPdf = async () => {
       setLoading(true)
       setError(null)
       try {
-        const response = await fetch(url)
-        if (!response.ok) throw new Error("No se pudo descargar el archivo PDF")
-        
-        const arrayBuffer = await response.arrayBuffer()
+        let arrayBuffer: ArrayBuffer
+        if (resourceId !== undefined) {
+          arrayBuffer = await fetchResourceFile(resourceId)
+        } else {
+          const response = await fetch(url as string)
+          if (!response.ok) throw new Error("No se pudo descargar el archivo PDF")
+          arrayBuffer = await response.arrayBuffer()
+        }
         if (!isMounted) return
 
         if (!window.pdfjsLib) throw new Error("PDF.js no está disponible")
@@ -119,7 +127,7 @@ export function PdfViewer({ url }: Props) {
     return () => {
       isMounted = false
     }
-  }, [url, libLoaded])
+  }, [url, resourceId, libLoaded])
 
   const handleZoomIn = () => {
     setScale((prev) => Math.min(prev + 0.25, 3.0))

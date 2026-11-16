@@ -54,22 +54,49 @@ test.describe('Flujo de Gestión de Recursos Académicos', () => {
     // Esperar a que el diálogo se cierre automáticamente
     await expect(page.getByText('Subir Recurso Académico')).not.toBeVisible({ timeout: 5000 });
 
-    // 8. Navegar al Panel Administrativo
+    // 8. El autor lo ve "En revisión" en Mis recursos
+    await page.goto('/mis-recursos');
+    const tarjeta = page.locator('li', { hasText: recursoTitulo });
+    await expect(tarjeta.getByText('En revisión')).toBeVisible({ timeout: 10000 });
+
+    // 9. El admin pide cambios con un comentario
     await page.goto('/admin');
     await expect(page.getByText('Panel Administrativo')).toBeVisible();
+    await page.getByRole('list', { name: 'Cola de moderación' }).getByRole('button', { name: recursoTitulo }).click();
+    const revision = page.getByRole('region', { name: `Revisión de ${recursoTitulo}` });
+    await revision.getByRole('button', { name: 'Pedir cambios' }).click();
+    const comentario = 'Agrega los autores y el año de publicación.';
+    await page.getByLabel('Qué debe corregir').fill(comentario);
+    await page.getByRole('button', { name: 'Enviar observación' }).click();
+    await expect(page.getByText('Observación enviada al autor')).toBeVisible();
 
-    // Asegurarse de estar en la pestaña de Pendientes
-    await page.getByRole('tab', { name: 'Pendientes' }).click();
+    // 10. El autor ve el comentario, corrige y reenvía con una nota
+    await page.goto('/mis-recursos');
+    await expect(tarjeta.getByText('Requiere cambios')).toBeVisible();
+    await expect(tarjeta.getByText(comentario)).toBeVisible();
+    await tarjeta.getByRole('button', { name: 'Corregir y reenviar' }).click();
+    const nota = 'Completé autores y año.';
+    await page.getByLabel(/Nota para el revisor/).fill(nota);
+    await page.getByRole('button', { name: 'Reenviar a revisión' }).click();
+    await expect(page.getByText('Reenviado a revisión')).toBeVisible();
+    await expect(tarjeta.getByText('En revisión')).toBeVisible();
 
-    // 9. Verificar que el recurso recién subido esté en la lista
-    const recursoFila = page.locator('tr', { hasText: recursoTitulo });
-    await expect(recursoFila).toBeVisible({ timeout: 10000 });
+    // 11. El admin ve la nota del reenvío y aprueba
+    await page.goto('/admin');
+    await page.getByRole('list', { name: 'Cola de moderación' }).getByRole('button', { name: recursoTitulo }).click();
+    // La nota aparece en el aviso de reenvío (y también en el historial).
+    await expect(revision.getByText('Nota del autor al reenviar')).toBeVisible();
+    await expect(revision.getByText(nota).first()).toBeVisible();
+    await revision.getByRole('button', { name: 'Aprobar y publicar' }).click();
+    await expect(page.getByText('Recurso aprobado y publicado')).toBeVisible();
+    await expect(
+      page.getByRole('list', { name: 'Cola de moderación' }).getByRole('button', { name: recursoTitulo }),
+    ).not.toBeVisible({ timeout: 5000 });
 
-    // 10. Aprobar el recurso y comprobar que desaparece de la lista
-    await recursoFila.getByRole('button', { name: 'Aprobar' }).click();
-    await expect(page.getByText('Recurso aprobado')).toBeVisible();
-
-    // El recurso ya no debería estar en la lista de pendientes
-    await expect(recursoFila).not.toBeVisible({ timeout: 5000 });
+    // 12. Queda publicado y aparece en la biblioteca
+    await page.goto('/mis-recursos');
+    await expect(tarjeta.getByText('Publicado')).toBeVisible();
+    await page.goto(`/biblioteca?q=${encodeURIComponent(recursoTitulo)}`);
+    await expect(page.getByRole('button', { name: `Ver detalle de ${recursoTitulo}` })).toBeVisible();
   });
 });
