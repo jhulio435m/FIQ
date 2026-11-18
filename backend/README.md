@@ -7,7 +7,7 @@ FastAPI + SQLModel/SQLAlchemy 2.0 + PostgreSQL + Redis + S3 (RustFS). Dependenci
 ```bash
 uv sync --extra dev
 uv run alembic upgrade head
-uv run python -m app.core.seed        # SOLO desarrollo: trunca tablas y vacía el bucket
+uv run python -m app.core.seed        # SOLO desarrollo: trunca tablas y vacía el bucket (pide --reset si hay datos)
 uv run uvicorn app.main:app --reload
 uv run --extra dev pytest
 uv run python scripts/check_openapi_docs.py   # OpenAPI vs docs/05_especificacion_api.md

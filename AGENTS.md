@@ -14,7 +14,8 @@
 - No subir secretos, `.env` o binarios grandes
 - No usar `any` en TypeScript
 - No comentarios genéricos tipo `// TODO` sin contexto
-- No correr `app.core.seed` fuera de desarrollo (trunca tablas y vacía el bucket); en staging/prod usar `app.core.bootstrap`
+- No correr `app.core.seed` fuera de desarrollo (trunca tablas y vacía el bucket); en staging/prod usar `app.core.bootstrap`. Si la base ya tiene datos exige `--reset`: no pasarlo sin confirmarlo con el usuario
+- Para pruebas que necesiten el stack, usar un proyecto aislado (`docker compose -p fiq-test …`) y no los volúmenes de desarrollo
 
 ## Layout (Backend)
 ```
