@@ -49,7 +49,7 @@ Variables principales:
 
 - **Kubernetes (camino principal):** workflow `Build & Deploy` → ver [`infra/k8s/README.md`](infra/k8s/README.md).
 - **Un solo VPS (fallback):** `./deploy_main.sh` con `docker-compose.prod.yml` (migraciones automáticas, Cloudflare Tunnel con nombre, RustFS local o S3 externo).
-- El primer administrador se crea con `python -m app.core.bootstrap` (idempotente, lo ejecutan ambos caminos). `app.core.seed` **trunca la base y vacía el bucket**: solo desarrollo, y se niega a correr en staging/producción.
+- El primer administrador se crea con `python -m app.core.bootstrap` (idempotente, lo ejecutan ambos caminos). `app.core.seed` **trunca la base y vacía el bucket**: solo desarrollo. Con una base vacía corre directamente; si ya hay datos exige `--reset` (y muestra qué borraría). En staging/producción se niega siempre.
 
 ## Desarrollo local
 
@@ -70,7 +70,7 @@ Backend:
 ```bash
 cd backend
 uv run alembic upgrade head
-uv run python -m app.core.seed
+uv run python -m app.core.seed           # base vacía; si ya tiene datos: --reset
 uv run uvicorn app.main:app --reload
 ```
 

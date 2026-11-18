@@ -1,4 +1,3 @@
-from app.core.config import settings
 import asyncio
 import uuid
 import random
@@ -9,6 +8,7 @@ from app.models.user import User
 from app.models.resource import Curso, Recurso
 from app.models.activity import RegistroActividad
 from app.core.security import hash_password
+from app.core.seed_guard import guard_reset, parse_reset_flag
 from app.core.seed_base import truncate_all, seed_roles, seed_admin, seed_tipos_recurso, seed_estados_recurso, seed_actividades, seed_niveles, seed_labs
 
 NOMBRES_DOCENTES = [
@@ -65,12 +65,8 @@ AUTORES = [
     "Levine", "Perry & Green", "McCabe & Smith", "Fogler"
 ]
 
-async def seed_mock():
-    if settings.is_production_like:
-        raise SystemExit(
-            "Este seed TRUNCA la base de datos y vacía el bucket: prohibido en "
-            f"ENVIRONMENT={settings.ENVIRONMENT}. Usa `python -m app.core.bootstrap`."
-        )
+async def seed_mock(reset: bool = False):
+    await guard_reset(engine, "app.core.seed_mock", reset)
     async with engine.begin() as conn:
         await truncate_all(conn)
 
@@ -199,4 +195,4 @@ async def seed_mock():
         print("Successfully seeded 50 mock resources, 500 activities, 29 mock users and 10 courses!")
 
 if __name__ == "__main__":
-    asyncio.run(seed_mock())
+    asyncio.run(seed_mock(reset=parse_reset_flag("app.core.seed_mock")))

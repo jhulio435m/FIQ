@@ -6,17 +6,14 @@ import logging
 from app.core.database import engine, async_session_maker
 from app.core.config import settings
 from app.models.resource import Curso, Recurso
+from app.core.seed_guard import guard_reset, parse_reset_flag
 from app.core.seed_base import truncate_all, seed_roles, seed_admin, seed_tipos_recurso, seed_estados_recurso, seed_actividades, seed_niveles, seed_labs
 from app.core.s3 import s3_service
 
 logger = logging.getLogger(__name__)
 
-async def seed():
-    if settings.is_production_like:
-        raise SystemExit(
-            "Este seed TRUNCA la base de datos y vacía el bucket: prohibido en "
-            f"ENVIRONMENT={settings.ENVIRONMENT}. Usa `python -m app.core.bootstrap`."
-        )
+async def seed(reset: bool = False):
+    await guard_reset(engine, "app.core.seed", reset)
     async with engine.begin() as conn:
         await truncate_all(conn)
 
@@ -94,4 +91,4 @@ async def seed():
         logger.info("Production-grade real seed completed!")
 
 if __name__ == "__main__":
-    asyncio.run(seed())
+    asyncio.run(seed(reset=parse_reset_flag("app.core.seed")))
